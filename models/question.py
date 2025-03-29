@@ -1,6 +1,6 @@
 import mysql.connector
 import json
-from app import get_db_connection
+from db_utils import get_db_connection
 
 class QuestionNotFoundError(Exception):
     """Exception raised when a question is not found"""

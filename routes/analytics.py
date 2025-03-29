@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required, current_user
 from decorators import role_required
 import json
-from app import get_db_connection
+from db_utils import get_db_connection
 from datetime import datetime, timedelta
 from models.db import get_db
 

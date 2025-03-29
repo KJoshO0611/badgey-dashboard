@@ -1,7 +1,7 @@
 import mysql.connector
 import json
 from datetime import datetime
-from app import get_db_connection
+from db_utils import get_db_connection
 from models.question import Question, QuestionNotFoundError
 
 class QuizNotFoundError(Exception):
