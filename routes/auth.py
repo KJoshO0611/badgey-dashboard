@@ -7,6 +7,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 from requests_oauthlib import OAuth2Session
 from models.user import User
 
+# Set environment variable to allow OAuth2 over HTTP (for development only)
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
@@ -15,6 +18,8 @@ auth_bp = Blueprint('auth', __name__)
 DISCORD_API_BASE_URL = 'https://discord.com/api/v10'
 DISCORD_AUTHORIZATION_BASE_URL = f'{DISCORD_API_BASE_URL}/oauth2/authorize'
 DISCORD_TOKEN_URL = f'{DISCORD_API_BASE_URL}/oauth2/token'
+# Hardcoded redirect URI to ensure match with Discord Developer Portal
+REDIRECT_URI = 'http://ec2-13-215-176-205.ap-southeast-1.compute.amazonaws.com/auth/callback'
 
 def token_updater(token):
     """Update the session with the new token."""
@@ -23,7 +28,8 @@ def token_updater(token):
 def make_discord_session(token=None, state=None, scope=None):
     """Create a Discord OAuth2Session."""
     client_id = current_app.config['DISCORD_CLIENT_ID']
-    redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
+    # Use hardcoded redirect URI instead of from config
+    redirect_uri = REDIRECT_URI
     
     if token:
         return OAuth2Session(client_id, token=token, auto_refresh_kwargs={
@@ -46,51 +52,96 @@ def login():
     """Discord OAuth2 login route."""
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
-        
-    return render_template('login.html')
-
-@auth_bp.route('/auth/discord')
-def auth_discord():
-    """Start the Discord OAuth2 flow."""
-    discord = make_discord_session(scope=['identify', 'email'])
-    authorization_url, state = discord.authorization_url(DISCORD_AUTHORIZATION_BASE_URL)
     
-    # State is used to prevent CSRF
+    # Custom build the auth URL to match required pattern exactly
+    client_id = current_app.config['DISCORD_CLIENT_ID']
+    redirect_uri = REDIRECT_URI
+    scope = 'email identify'
+    state = os.urandom(16).hex()
+    
+    # Store state for CSRF protection
     session['oauth2_state'] = state
     
-    # Redirect user to Discord for authorization
-    return redirect(authorization_url)
+    # Build URL in exact order: base -> client_id -> response_type -> redirect -> scope
+    authorization_url = (
+        f"https://discord.com/oauth2/authorize"
+        f"?client_id={client_id}"
+        f"&response_type=code"
+        f"&redirect_uri={requests.utils.quote(redirect_uri)}"
+        f"&scope={scope}"
+        f"&state={state}"
+    )
+        
+    return render_template('login.html', discord_oauth_url=authorization_url)
 
 @auth_bp.route('/auth/callback')
 def auth_callback():
     """Handle the Discord OAuth2 callback."""
     if 'error' in request.args:
-        flash(f"Error: {request.args['error']}", 'danger')
+        logger.error(f"Discord OAuth error: {request.args.get('error')}")
+        flash(f"Error: {request.args.get('error')}", 'danger')
         return redirect(url_for('auth.login'))
     
-    if 'oauth2_state' not in session:
-        flash("You need to authorize with Discord first!", 'warning')
+    if 'state' not in request.args or 'oauth2_state' not in session:
+        logger.error("Missing state parameter in OAuth callback")
+        flash("Authentication error: Missing state parameter", 'warning')
         return redirect(url_for('auth.login'))
     
-    # Get the OAuth token
+    if request.args.get('state') != session['oauth2_state']:
+        logger.error("State mismatch in OAuth callback")
+        flash("Authentication error: Invalid state parameter", 'warning')
+        return redirect(url_for('auth.login'))
+    
+    # Get authorization code
+    code = request.args.get('code')
+    if not code:
+        logger.error("No authorization code in callback")
+        flash("Authentication error: No authorization code received", 'danger') 
+        return redirect(url_for('auth.login'))
+    
+    # Exchange authorization code for access token
     try:
-        discord = make_discord_session(state=session['oauth2_state'])
-        token = discord.fetch_token(
-            DISCORD_TOKEN_URL,
-            client_secret=current_app.config['DISCORD_CLIENT_SECRET'],
-            authorization_response=request.url
-        )
+        # Manually exchange the code for a token
+        token_data = {
+            'client_id': current_app.config['DISCORD_CLIENT_ID'],
+            'client_secret': current_app.config['DISCORD_CLIENT_SECRET'],
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': REDIRECT_URI,
+            'scope': 'identify email'
+        }
+        
+        logger.info(f"Exchanging code for token with data: {token_data}")
+        
+        token_response = requests.post(DISCORD_TOKEN_URL, data=token_data)
+        if token_response.status_code != 200:
+            logger.error(f"Token exchange failed: {token_response.status_code} - {token_response.text}")
+            flash("Failed to authenticate with Discord. Please try again.", 'danger')
+            return redirect(url_for('auth.login'))
+            
+        token = token_response.json()
         session['oauth2_token'] = token
+        
+        logger.info(f"Successfully exchanged code for token")
     except Exception as e:
-        logger.error(f"Error fetching OAuth token: {e}")
+        logger.error(f"Error exchanging code for token: {str(e)}")
         flash("An error occurred during login. Please try again.", 'danger')
         return redirect(url_for('auth.login'))
     
-    # Get the user info from Discord
+    # Get the user info from Discord using the access token
     try:
-        discord = make_discord_session(token=token)
-        user_response = discord.get(f'{DISCORD_API_BASE_URL}/users/@me')
+        headers = {
+            'Authorization': f"Bearer {token['access_token']}"
+        }
+        user_response = requests.get(f'{DISCORD_API_BASE_URL}/users/@me', headers=headers)
+        
+        if user_response.status_code != 200:
+            logger.error(f"Failed to get user info: {user_response.status_code} - {user_response.text}")
+            flash("Failed to get user information from Discord.", 'danger')
+            return redirect(url_for('auth.login'))
+            
         user_data = user_response.json()
+        logger.info(f"Got user data: {user_data}")
         
         discord_id = user_data['id']
         username = user_data['username']
@@ -107,8 +158,9 @@ def auth_callback():
                 cursor.execute("SELECT COUNT(*) as count FROM dashboard_users")
                 result = cursor.fetchone()
                 is_first_user = result['count'] == 0
+                logger.info(f"First user check: {is_first_user}")
         except Exception as e:
-            logger.error(f"Error checking if first user: {e}")
+            logger.error(f"Error checking if first user: {str(e)}")
         
         # Default roles based on being first user
         roles = ['admin'] if is_first_user else ['user']
@@ -125,6 +177,7 @@ def auth_callback():
         
         # Log in the user
         login_user(db_user)
+        logger.info(f"User logged in: {username} ({discord_id})")
         
         next_url = session.pop('next', None)
         if next_url:
@@ -132,7 +185,7 @@ def auth_callback():
         
         return redirect(url_for('dashboard'))
     except Exception as e:
-        logger.error(f"Error during Discord authentication: {e}")
+        logger.error(f"Error during Discord authentication: {str(e)}")
         flash("An error occurred during login. Please try again.", 'danger')
         return redirect(url_for('auth.login'))
 
