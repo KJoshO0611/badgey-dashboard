@@ -113,5 +113,6 @@ def init_db_command():
     click.echo('Initialized the database.')
 
 if __name__ == '__main__':
+    # Use PORT environment variable if provided by hosting platform
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port) 

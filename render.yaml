@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: badgey-dashboard
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      - key: SECRET_KEY
+        sync: false
+      - key: FLASK_ENV
+        value: production
+      - key: DBHOST
+        sync: false
+      - key: DBPORT
+        sync: false
+      - key: DBUSER
+        sync: false
+      - key: DBPASSWORD
+        sync: false
+      - key: DBNAME
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false 

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__)
 
 # Discord OAuth2 constants
-DISCORD_API_BASE_URL = 'https://discord.com/'
+DISCORD_API_BASE_URL = 'https://discord.com/api/v10'
 DISCORD_AUTHORIZATION_BASE_URL = f'{DISCORD_API_BASE_URL}/oauth2/authorize'
 DISCORD_TOKEN_URL = f'{DISCORD_API_BASE_URL}/oauth2/token'
 
