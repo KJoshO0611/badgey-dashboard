@@ -23,8 +23,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('logs/app.log')
+        logging.StreamHandler(),  # Log to stdout/stderr only
     ]
 )
 logger = logging.getLogger(__name__)
@@ -57,10 +56,6 @@ app.register_blueprint(quizzes_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(api_bp, url_prefix='/api')
-
-# Ensure the logs directory exists
-if not os.path.exists('logs'):
-    os.makedirs('logs')
 
 @login_manager.user_loader
 def load_user(user_id):

@@ -8,18 +8,18 @@ from requests_oauthlib import OAuth2Session
 from models.user import User
 
 # Set environment variable to allow OAuth2 over HTTP (for development only)
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+# Only enable this in non-production environments
+if os.environ.get('FLASK_ENV') != 'production' and not os.environ.get('RENDER'):
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
 # Discord OAuth2 constants
-DISCORD_API_BASE_URL = 'https://discord.com/api/v10'
+DISCORD_API_BASE_URL = 'https://discord.com/'
 DISCORD_AUTHORIZATION_BASE_URL = f'{DISCORD_API_BASE_URL}/oauth2/authorize'
 DISCORD_TOKEN_URL = f'{DISCORD_API_BASE_URL}/oauth2/token'
-# Hardcoded redirect URI to ensure match with Discord Developer Portal
-REDIRECT_URI = 'http://ec2-13-215-176-205.ap-southeast-1.compute.amazonaws.com/auth/callback'
 
 def token_updater(token):
     """Update the session with the new token."""
@@ -28,8 +28,8 @@ def token_updater(token):
 def make_discord_session(token=None, state=None, scope=None):
     """Create a Discord OAuth2Session."""
     client_id = current_app.config['DISCORD_CLIENT_ID']
-    # Use hardcoded redirect URI instead of from config
-    redirect_uri = REDIRECT_URI
+    # Get redirect URI from app config
+    redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
     
     if token:
         return OAuth2Session(client_id, token=token, auto_refresh_kwargs={
@@ -55,7 +55,7 @@ def login():
     
     # Custom build the auth URL to match required pattern exactly
     client_id = current_app.config['DISCORD_CLIENT_ID']
-    redirect_uri = REDIRECT_URI
+    redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
     scope = 'email identify'
     state = os.urandom(16).hex()
     
@@ -71,6 +71,8 @@ def login():
         f"&scope={scope}"
         f"&state={state}"
     )
+    
+    logger.info(f"Generated Discord OAuth URL with redirect URI: {redirect_uri}")
         
     return render_template('login.html', discord_oauth_url=authorization_url)
 
@@ -102,16 +104,17 @@ def auth_callback():
     # Exchange authorization code for access token
     try:
         # Manually exchange the code for a token
+        redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
         token_data = {
             'client_id': current_app.config['DISCORD_CLIENT_ID'],
             'client_secret': current_app.config['DISCORD_CLIENT_SECRET'],
             'grant_type': 'authorization_code',
             'code': code,
-            'redirect_uri': REDIRECT_URI,
+            'redirect_uri': redirect_uri,
             'scope': 'identify email'
         }
         
-        logger.info(f"Exchanging code for token with data: {token_data}")
+        logger.info(f"Exchanging code for token with redirect URI: {redirect_uri}")
         
         token_response = requests.post(DISCORD_TOKEN_URL, data=token_data)
         if token_response.status_code != 200:
