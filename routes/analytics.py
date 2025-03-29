@@ -1,0 +1,361 @@
+import logging
+from flask import Blueprint, render_template, jsonify, request
+from flask_login import login_required, current_user
+from decorators import role_required
+import json
+from app import get_db_connection
+from datetime import datetime, timedelta
+from models.db import get_db
+
+logger = logging.getLogger(__name__)
+
+analytics_bp = Blueprint('analytics', __name__, url_prefix='/analytics')
+
+@analytics_bp.route('/')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def index():
+    """Show the analytics dashboard"""
+    # Get summary metrics
+    metrics = get_summary_metrics()
+    
+    # Get top quizzes
+    top_quizzes = get_top_quizzes(10)
+    
+    # Get recent activity
+    recent_activity = get_recent_activity(10)
+    
+    # Get user stats
+    user_stats = get_user_stats()
+    
+    return render_template(
+        'analytics/index.html', 
+        metrics=metrics,
+        top_quizzes=top_quizzes,
+        recent_activity=recent_activity,
+        user_stats=user_stats
+    )
+
+@analytics_bp.route('/quizzes')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def quizzes():
+    """Show quiz analytics"""
+    return render_template('analytics/quizzes.html')
+
+@analytics_bp.route('/users')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def users():
+    """Show user analytics"""
+    return render_template('analytics/users.html')
+
+@analytics_bp.route('/trends')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def trends():
+    """Show trend analytics"""
+    return render_template('analytics/trends.html')
+
+# API endpoints for chart data
+@analytics_bp.route('/api/summary')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def api_summary():
+    """API endpoint for summary metrics"""
+    metrics = get_summary_metrics()
+    return jsonify(metrics)
+
+@analytics_bp.route('/api/quiz_activity')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def api_quiz_activity():
+    """API endpoint for quiz activity over time"""
+    days = int(request.args.get('days', 30))
+    activity = get_quiz_activity(days)
+    return jsonify(activity)
+
+@analytics_bp.route('/api/top_quizzes')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def api_top_quizzes():
+    """API endpoint for top quizzes"""
+    limit = int(request.args.get('limit', 10))
+    quizzes = get_top_quizzes(limit)
+    return jsonify(quizzes)
+
+@analytics_bp.route('/api/user_activity')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def api_user_activity():
+    """API endpoint for user activity"""
+    days = int(request.args.get('days', 30))
+    activity = get_user_activity(days)
+    return jsonify(activity)
+
+@analytics_bp.route('/api/quiz-completions')
+@login_required
+def api_quiz_completions():
+    """API endpoint for quiz completion data."""
+    if not current_user.has_role('admin') and not current_user.has_role('analytics'):
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    try:
+        days = int(request.args.get('days', 30))
+        conn = get_db()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    DATE(completed_at) as date,
+                    COUNT(*) as count
+                FROM quiz_scores
+                WHERE completed_at >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+                GROUP BY DATE(completed_at)
+                ORDER BY date
+            """, (days,))
+            results = cursor.fetchall()
+            
+        # Format data for Chart.js
+        dates = [row['date'].strftime('%Y-%m-%d') for row in results]
+        counts = [row['count'] for row in results]
+        
+        return jsonify({
+            'labels': dates,
+            'datasets': [{
+                'label': 'Quiz Completions',
+                'data': counts,
+                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
+                'borderColor': 'rgba(54, 162, 235, 1)',
+                'borderWidth': 1
+            }]
+        })
+    except Exception as e:
+        logger.error(f"Error retrieving quiz completion data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions for analytics data
+def get_summary_metrics():
+    """Get summary metrics for the dashboard"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Total quizzes
+        cursor.execute("SELECT COUNT(*) FROM quizzes")
+        total_quizzes = cursor.fetchone()[0]
+        
+        # Total questions
+        cursor.execute("SELECT COUNT(*) FROM questions")
+        total_questions = cursor.fetchone()[0]
+        
+        # Total quiz attempts
+        cursor.execute("SELECT COUNT(*) FROM user_scores")
+        total_attempts = cursor.fetchone()[0]
+        
+        # Total users
+        cursor.execute("SELECT COUNT(DISTINCT user_id) FROM user_scores")
+        total_users = cursor.fetchone()[0]
+        
+        # Average score
+        cursor.execute("SELECT AVG(score) FROM user_scores")
+        avg_score = cursor.fetchone()[0] or 0
+        
+        # Quiz attempts today
+        today = datetime.now().date()
+        cursor.execute("SELECT COUNT(*) FROM user_scores WHERE DATE(timestamp) = %s", (today,))
+        attempts_today = cursor.fetchone()[0]
+        
+        # Calculate daily trend (% increase/decrease from yesterday)
+        yesterday = today - timedelta(days=1)
+        cursor.execute("SELECT COUNT(*) FROM user_scores WHERE DATE(timestamp) = %s", (yesterday,))
+        attempts_yesterday = cursor.fetchone()[0]
+        
+        if attempts_yesterday > 0:
+            daily_trend = ((attempts_today - attempts_yesterday) / attempts_yesterday) * 100
+        else:
+            daily_trend = 100 if attempts_today > 0 else 0
+        
+        return {
+            'total_quizzes': total_quizzes,
+            'total_questions': total_questions,
+            'total_attempts': total_attempts,
+            'total_users': total_users,
+            'avg_score': round(avg_score, 2),
+            'attempts_today': attempts_today,
+            'daily_trend': round(daily_trend, 2)
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_top_quizzes(limit=10):
+    """Get top quizzes by number of attempts"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        query = """
+        SELECT q.quiz_id, q.quiz_name, COUNT(*) as attempts, AVG(us.score) as avg_score
+        FROM quizzes q
+        JOIN user_scores us ON q.quiz_id = us.quiz_id
+        GROUP BY q.quiz_id, q.quiz_name
+        ORDER BY attempts DESC
+        LIMIT %s
+        """
+        cursor.execute(query, (limit,))
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_recent_activity(limit=10):
+    """Get recent quiz activity"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        query = """
+        SELECT us.score_id, us.user_id, us.username, q.quiz_id, q.quiz_name, us.score, us.timestamp
+        FROM user_scores us
+        JOIN quizzes q ON us.quiz_id = q.quiz_id
+        ORDER BY us.timestamp DESC
+        LIMIT %s
+        """
+        cursor.execute(query, (limit,))
+        activity = cursor.fetchall()
+        
+        # Convert timestamp to string for JSON serialization
+        for entry in activity:
+            entry['timestamp'] = entry['timestamp'].isoformat() if entry['timestamp'] else None
+        
+        return activity
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_user_stats():
+    """Get user statistics"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Top users by total score
+        top_users_query = """
+        SELECT user_id, username, SUM(score) as total_score, COUNT(*) as quiz_count
+        FROM user_scores
+        GROUP BY user_id, username
+        ORDER BY total_score DESC
+        LIMIT 10
+        """
+        cursor.execute(top_users_query)
+        top_users = cursor.fetchall()
+        
+        # Get active hours (when quizzes are taken)
+        active_hours_query = """
+        SELECT HOUR(timestamp) as hour, COUNT(*) as count
+        FROM user_scores
+        GROUP BY HOUR(timestamp)
+        ORDER BY hour
+        """
+        cursor.execute(active_hours_query)
+        active_hours = cursor.fetchall()
+        
+        # Format for chart
+        hours_data = [0] * 24
+        for entry in active_hours:
+            hour = entry['hour']
+            if 0 <= hour < 24:
+                hours_data[hour] = entry['count']
+        
+        return {
+            'top_users': top_users,
+            'active_hours': hours_data
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_quiz_activity(days=30):
+    """Get quiz activity over time"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Calculate date range
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days-1)
+        
+        # Generate all dates in range
+        date_range = []
+        current_date = start_date
+        while current_date <= end_date:
+            date_range.append(current_date)
+            current_date += timedelta(days=1)
+        
+        # Query activity by date
+        query = """
+        SELECT DATE(timestamp) as date, COUNT(*) as count
+        FROM user_scores
+        WHERE timestamp >= %s AND timestamp < %s
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+        """
+        cursor.execute(query, (start_date, end_date + timedelta(days=1)))
+        activity_data = cursor.fetchall()
+        
+        # Convert to dictionary for easier lookup
+        activity_by_date = {entry['date'].isoformat(): entry['count'] for entry in activity_data}
+        
+        # Format for chart
+        result = []
+        for date in date_range:
+            date_str = date.isoformat()
+            result.append({
+                'date': date_str,
+                'count': activity_by_date.get(date_str, 0)
+            })
+        
+        return result
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_user_activity(days=30):
+    """Get user activity over time"""
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # Calculate date range
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days-1)
+        
+        # Query unique users by date
+        query = """
+        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as unique_users
+        FROM user_scores
+        WHERE timestamp >= %s AND timestamp < %s
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+        """
+        cursor.execute(query, (start_date, end_date + timedelta(days=1)))
+        activity_data = cursor.fetchall()
+        
+        # Convert to dictionary for easier lookup
+        activity_by_date = {entry['date'].isoformat(): entry['unique_users'] for entry in activity_data}
+        
+        # Generate all dates in range
+        result = []
+        current_date = start_date
+        while current_date <= end_date:
+            date_str = current_date.isoformat()
+            result.append({
+                'date': date_str,
+                'unique_users': activity_by_date.get(date_str, 0)
+            })
+            current_date += timedelta(days=1)
+        
+        return result
+    finally:
+        cursor.close()
+        conn.close() 

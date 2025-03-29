@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile | Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4"><i class="fas fa-user-circle me-2"></i>My Profile</h1>
+    
+    <div class="row">
+        <!-- User Profile Card -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <img src="{{ current_user.avatar_url }}" alt="{{ current_user.username }}" class="rounded-circle img-fluid mb-3" style="width: 150px; height: 150px;">
+                    <h3 class="card-title">{{ current_user.username }}</h3>
+                    <p class="text-muted">Discord ID: {{ current_user.discord_id }}</p>
+                    <hr>
+                    <div class="d-flex justify-content-center">
+                        <div class="me-3 text-center">
+                            <h5>Roles</h5>
+                            <div>
+                                {% for role in current_user.roles %}
+                                <span class="badge bg-primary mb-1">{{ role }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">User</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <p class="card-text">
+                        <small class="text-muted">Joined: {{ current_user.created_at|default("Unknown", true) }}</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Stats and Activity -->
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Your Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4" id="user-stats">
+                        <div class="col-md-3 col-6">
+                            <div class="text-center">
+                                <h2 class="display-6 fw-bold" id="quiz-count">-</h2>
+                                <p class="text-muted">Quizzes Created</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center">
+                                <h2 class="display-6 fw-bold" id="question-count">-</h2>
+                                <p class="text-muted">Questions</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center">
+                                <h2 class="display-6 fw-bold" id="quizzes-taken">-</h2>
+                                <p class="text-muted">Quizzes Taken</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <div class="text-center">
+                                <h2 class="display-6 fw-bold" id="avg-score">-</h2>
+                                <p class="text-muted">Avg. Score</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div id="recent-activity">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading your activity...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch user stats
+    fetch('/api/stats/user')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('quiz-count').textContent = data.quiz_count;
+            document.getElementById('question-count').textContent = data.question_count;
+            document.getElementById('quizzes-taken').textContent = data.quizzes_taken;
+            document.getElementById('avg-score').textContent = data.avg_score ? 
+                Math.round(data.avg_score * 10) / 10 + '%' : '0%';
+            
+            // Update recent activity
+            const activityContainer = document.getElementById('recent-activity');
+            
+            if (data.recent_activity && data.recent_activity.length > 0) {
+                let activityHtml = '<ul class="list-group list-group-flush">';
+                
+                data.recent_activity.forEach(activity => {
+                    const date = new Date(activity.completed_at);
+                    const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                    
+                    activityHtml += `
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${activity.quiz_name}</strong>
+                                    <div><small class="text-muted">Score: ${activity.score}%</small></div>
+                                </div>
+                                <small class="text-muted">${formattedDate}</small>
+                            </div>
+                        </li>
+                    `;
+                });
+                
+                activityHtml += '</ul>';
+                activityContainer.innerHTML = activityHtml;
+            } else {
+                activityContainer.innerHTML = '<div class="text-center py-4">No recent activity found.</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching user stats:', error);
+            document.getElementById('recent-activity').innerHTML = 
+                '<div class="alert alert-danger">Failed to load activity data.</div>';
+        });
+});
+</script>
+{% endblock %} 

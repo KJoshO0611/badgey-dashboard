@@ -1,0 +1,49 @@
+{% extends 'layout.html' %}
+
+{% block title %}Login - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow">
+            <div class="card-body text-center p-5">
+                <i class="fas fa-robot fa-4x mb-4 text-primary"></i>
+                
+                <h2 class="card-title mb-4">Login to Dashboard</h2>
+                
+                <p class="card-text mb-4">
+                    Connect your Discord account to manage quizzes, view analytics, and more.
+                </p>
+                
+                <a href="{{ discord_oauth_url }}" class="btn btn-primary btn-lg w-100">
+                    <i class="fab fa-discord me-2"></i> Login with Discord
+                </a>
+                
+                <div class="mt-4">
+                    <small class="text-muted">
+                        By logging in, you grant the Badgey Quiz Dashboard permission to access your 
+                        Discord ID, username, and email address.
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Need help?</h5>
+                <p class="card-text">
+                    If you're experiencing issues logging in, please ensure that:
+                </p>
+                <ul>
+                    <li>You're a member of the Discord server</li>
+                    <li>You have the necessary permissions</li>
+                    <li>You're using a supported browser</li>
+                </ul>
+                <p class="card-text">
+                    For assistance, please contact the server administrators.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

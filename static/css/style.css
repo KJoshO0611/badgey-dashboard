@@ -1,0 +1,202 @@
+/* Main Styles for Badgey Quiz Dashboard */
+
+/* Global Styles */
+:root {
+    --primary-color: #5865F2;
+    --secondary-color: #36393F;
+    --accent-color: #EB459E;
+    --success-color: #57F287;
+    --danger-color: #ED4245;
+    --warning-color: #FEE75C;
+    --info-color: #5865F2;
+    --light-color: #FFFFFF;
+    --dark-color: #2C2F33;
+    --gray-color: #99AAB5;
+    --background-color: #F8F9FA;
+}
+
+body {
+    background-color: var(--background-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--dark-color);
+}
+
+/* Custom Bootstrap Overrides */
+.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.bg-secondary {
+    background-color: var(--secondary-color) !important;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #4752c4;
+    border-color: #4752c4;
+}
+
+/* Card Styles */
+.card {
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+/* Dashboard Cards */
+.stats-card {
+    border: none;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+/* Nav Styles */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-brand {
+    font-weight: 600;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Table Styles */
+.table thead th {
+    background-color: var(--light-color);
+    border-top: 0;
+    font-weight: 600;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(88, 101, 242, 0.05);
+}
+
+/* Form Styles */
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(88, 101, 242, 0.25);
+}
+
+/* Quiz Management Styles */
+.quiz-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.quiz-card .card-body {
+    flex: 1 1 auto;
+}
+
+.quiz-actions {
+    margin-top: auto;
+}
+
+/* Analytics Page Styles */
+.metric-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 1rem;
+    color: var(--gray-color);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 1.5rem;
+}
+
+/* Question Management Styles */
+.question-item {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.5rem;
+    background-color: var(--light-color);
+}
+
+.option-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.option-key {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    color: var(--light-color);
+    margin-right: 0.5rem;
+    font-weight: 600;
+}
+
+.correct-option .option-key {
+    background-color: var(--success-color);
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .metric-value {
+        font-size: 2rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+}
+
+/* Animation Styles */
+.fade-in {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Utility Classes */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Footer Styles */
+footer {
+    margin-top: auto;
+} 

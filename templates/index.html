@@ -1,0 +1,109 @@
+{% extends 'layout.html' %}
+
+{% block title %}Home - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="px-4 py-5 my-5 text-center">
+    <i class="fas fa-robot fa-5x mb-4 text-primary"></i>
+    <h1 class="display-5 fw-bold">Badgey Quiz Dashboard</h1>
+    <div class="col-lg-6 mx-auto">
+        <p class="lead mb-4">
+            Welcome to the Badgey Quiz Dashboard. This web interface allows you to manage quizzes, 
+            view analytics, and administer the Badgey Discord Bot.
+        </p>
+        <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg px-4 gap-3">
+                    <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                </a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg px-4 gap-3">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login with Discord
+                </a>
+            {% endif %}
+            <a href="https://github.com/yourusername/badgey-quiz-bot" class="btn btn-outline-secondary btn-lg px-4">
+                <i class="fab fa-github me-2"></i>GitHub
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-4 py-5">
+        <!-- Quiz Management -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="feature-icon d-inline-flex align-items-center justify-content-center fs-2 mb-3">
+                        <i class="fas fa-list-alt text-primary"></i>
+                    </div>
+                    <h3 class="card-title">Quiz Management</h3>
+                    <p class="card-text">
+                        Create, edit, and manage quizzes. Add questions with multiple-choice options,
+                        set correct answers, and provide explanations.
+                    </p>
+                    <a href="{{ url_for('quizzes.list_quizzes') if current_user.is_authenticated else url_for('auth.login') }}" class="btn btn-primary">
+                        Manage Quizzes
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Analytics -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="feature-icon d-inline-flex align-items-center justify-content-center fs-2 mb-3">
+                        <i class="fas fa-chart-line text-primary"></i>
+                    </div>
+                    <h3 class="card-title">Analytics</h3>
+                    <p class="card-text">
+                        View detailed analytics on quiz performance, user engagement, and more.
+                        Understand how your quizzes are being used and improve them.
+                    </p>
+                    <a href="{{ url_for('analytics.index') if current_user.is_authenticated and (current_user.has_role('analytics_viewer') or current_user.is_admin) else url_for('auth.login') }}" class="btn btn-primary">
+                        View Analytics
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- User Management -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="feature-icon d-inline-flex align-items-center justify-content-center fs-2 mb-3">
+                        <i class="fas fa-users text-primary"></i>
+                    </div>
+                    <h3 class="card-title">User Management</h3>
+                    <p class="card-text">
+                        Manage user permissions and roles. Assign quiz creators, editors,
+                        and analytics viewers to control access to features.
+                    </p>
+                    <a href="{{ url_for('admin.users') if current_user.is_authenticated and current_user.is_admin else url_for('auth.login') }}" class="btn btn-primary">
+                        Manage Users
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container my-5">
+    <div class="p-5 text-center bg-body-tertiary rounded-3">
+        <h2 class="text-body-emphasis">Ready to get started?</h2>
+        <p class="lead">
+            Connect your Discord account to manage quizzes, view analytics, and more.
+        </p>
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-lg btn-primary">
+                <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+            </a>
+        {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn btn-lg btn-primary">
+                <i class="fas fa-sign-in-alt me-2"></i>Login with Discord
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

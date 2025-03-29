@@ -1,0 +1,239 @@
+{% extends 'layout.html' %}
+
+{% block title %}Dashboard - Badgey Quiz Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        transition: transform 0.3s;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    .card-icon {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+                <a href="{{ url_for('quizzes.create_quiz') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-plus me-1"></i>Create Quiz
+                </a>
+            {% endif %}
+            <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-folder me-1"></i>My Quizzes
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <!-- My Quizzes -->
+    <div class="col-md-3">
+        <div class="card stats-card bg-primary text-white h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-folder card-icon"></i>
+                <h5 class="card-title">My Quizzes</h5>
+                <h2 class="display-6">{{ user_stats.quiz_count }}</h2>
+                <p class="card-text">Quizzes you've created</p>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-light btn-sm">View All</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Quiz Score -->
+    <div class="col-md-3">
+        <div class="card stats-card bg-success text-white h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-medal card-icon"></i>
+                <h5 class="card-title">Recent Score</h5>
+                <h2 class="display-6">{{ user_stats.recent_score if user_stats.recent_score is not none else 'N/A' }}</h2>
+                <p class="card-text">Your last quiz attempt</p>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('quizzes.list_quizzes') }}" class="btn btn-light btn-sm">Take a Quiz</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Total Questions -->
+    <div class="col-md-3">
+        <div class="card stats-card bg-info text-white h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-question-circle card-icon"></i>
+                <h5 class="card-title">Questions</h5>
+                <h2 class="display-6">{{ user_stats.question_count }}</h2>
+                <p class="card-text">Questions you've created</p>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Total Quizzes Taken -->
+    <div class="col-md-3">
+        <div class="card stats-card bg-warning text-dark h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-clipboard-check card-icon"></i>
+                <h5 class="card-title">Quizzes Taken</h5>
+                <h2 class="display-6">{{ user_stats.quizzes_taken }}</h2>
+                <p class="card-text">Quizzes you've completed</p>
+            </div>
+            <div class="card-footer text-center">
+                <a href="{{ url_for('quizzes.list_quizzes') }}" class="btn btn-dark btn-sm">Take More</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Recent Activity -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% if recent_activity %}
+                        {% for activity in recent_activity %}
+                            <div class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ activity.action }}</h6>
+                                    <small>{{ activity.timestamp }}</small>
+                                </div>
+                                <p class="mb-1">{{ activity.description }}</p>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="list-group-item">
+                            <p class="mb-0 text-muted">No recent activity</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="#" class="btn btn-sm btn-outline-primary">View All Activity</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Your Quizzes -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Your Quizzes</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% if user_quizzes %}
+                        {% for quiz in user_quizzes %}
+                            <a href="{{ url_for('quizzes.view', quiz_id=quiz.id) }}" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ quiz.name }}</h6>
+                                    <small>{{ quiz.question_count }} questions</small>
+                                </div>
+                                <div class="d-flex w-100 justify-content-between">
+                                    <p class="mb-1 text-muted">Created {{ quiz.created_at }}</p>
+                                    <small>{{ quiz.completion_count }} completions</small>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    {% else %}
+                        <div class="list-group-item">
+                            <p class="mb-0 text-muted">You haven't created any quizzes yet</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-sm btn-outline-primary">View All Quizzes</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.has_role('analytics_viewer') or current_user.is_admin %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quiz Activity</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="activityChart" height="100"></canvas>
+            </div>
+            <div class="card-footer text-end">
+                <a href="{{ url_for('analytics.index') }}" class="btn btn-sm btn-outline-primary">View Full Analytics</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup analytics chart if element exists
+        const chartElement = document.getElementById('activityChart');
+        if (chartElement) {
+            setupActivityChart(chartElement);
+        }
+    });
+    
+    function setupActivityChart(canvas) {
+        // Demo chart data - in production, this would come from an API
+        const dates = Array.from({length: 7}).map(function(_, i) {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+        
+        const activityData = {
+            labels: dates,
+            datasets: [{
+                label: 'Quiz Completions',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 2,
+                data: [12, 19, 3, 5, 2, 3, 7],
+                tension: 0.4
+            }]
+        };
+        
+        const activityCtx = canvas.getContext('2d');
+        new Chart(activityCtx, {
+            type: 'line',
+            data: activityData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %} 
