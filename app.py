@@ -104,46 +104,14 @@ def format_datetime(value, format='%Y-%m-%d %H:%M'):
             return value
     return value.strftime(format)
 
-# HTTP optimizations
-
-# Gzip compression
-def gzip_response(f):
-    @functools.wraps(f)
-    def wrapped(*args, **kwargs):
-        response = f(*args, **kwargs)
-        
-        # Don't compress small responses or already compressed responses
-        if (response.status_code != 200 or
-                len(response.get_data()) < 500 or  # Less than 500 bytes
-                'Content-Encoding' in response.headers or
-                not response.headers.get('Content-Type', '').startswith(('text/', 'application/json', 'application/javascript'))):
-            return response
-            
-        # Check if client accepts gzip encoding
-        if 'gzip' not in request.headers.get('Accept-Encoding', ''):
-            return response
-            
-        # Compress the response
-        gzip_buffer = BytesIO()
-        with gzip.GzipFile(mode='wb', fileobj=gzip_buffer) as gzip_file:
-            gzip_file.write(response.get_data())
-        
-        # Update response with compressed data
-        response.set_data(gzip_buffer.getvalue())
-        response.headers['Content-Encoding'] = 'gzip'
-        response.headers['Content-Length'] = len(response.get_data())
-        response.headers['Vary'] = 'Accept-Encoding'
-        
-        return response
-    return wrapped
-
-# Apply gzip compression to all responses
-app.after_request(gzip_response)
-
+# Apply decorators in correct order - cache headers first, then compression
 # Add browser caching headers for static content
 @app.after_request
 def add_cache_headers(response):
     # Only add cache headers to successful responses
+    if not hasattr(response, 'status_code'):
+        return response
+        
     if response.status_code < 400:
         # Static files (CSS, JS, images)
         if request.path.startswith('/static/'):
@@ -159,6 +127,37 @@ def add_cache_headers(response):
     
     # Add additional performance headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    return response
+
+# Apply gzip compression to all responses
+@app.after_request
+def apply_gzip_compression(response):
+    # Guard against ClosingIterator responses that don't have status_code
+    if not hasattr(response, 'status_code'):
+        return response
+        
+    # Don't compress small responses or already compressed responses
+    if (response.status_code != 200 or
+            len(response.get_data()) < 500 or  # Less than 500 bytes
+            'Content-Encoding' in response.headers or
+            not response.headers.get('Content-Type', '').startswith(('text/', 'application/json', 'application/javascript'))):
+        return response
+        
+    # Check if client accepts gzip encoding
+    if 'gzip' not in request.headers.get('Accept-Encoding', ''):
+        return response
+        
+    # Compress the response
+    gzip_buffer = BytesIO()
+    with gzip.GzipFile(mode='wb', fileobj=gzip_buffer) as gzip_file:
+        gzip_file.write(response.get_data())
+    
+    # Update response with compressed data
+    response.set_data(gzip_buffer.getvalue())
+    response.headers['Content-Encoding'] = 'gzip'
+    response.headers['Content-Length'] = len(response.get_data())
+    response.headers['Vary'] = 'Accept-Encoding'
     
     return response
 

@@ -123,6 +123,11 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         path = self.get_cookie_path(app)
         cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         
+        # Check if response is a function or doesn't have set_cookie method
+        if not hasattr(response, 'set_cookie'):
+            app.logger.error(f"Response object doesn't have set_cookie method. Type: {type(response)}")
+            return
+            
         # If the session is empty, delete it
         if not session:
             if session.modified:
@@ -243,18 +248,26 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 cookie_sid = signer.dumps(cookie_sid)
                 
             app.logger.debug(f"Setting session cookie: {cookie_name}={cookie_sid[:10]}...")
-            response.set_cookie(
-                cookie_name,
-                cookie_sid,
-                expires=expires,
-                httponly=httponly,
-                domain=domain,
-                path=path,
-                secure=secure,
-                samesite=samesite
-            )
+            
+            # Double-check response object has set_cookie method
+            if hasattr(response, 'set_cookie'):
+                response.set_cookie(
+                    cookie_name,
+                    cookie_sid,
+                    expires=expires,
+                    httponly=httponly,
+                    domain=domain,
+                    path=path,
+                    secure=secure,
+                    samesite=samesite
+                )
+            else:
+                app.logger.error(f"Response object still doesn't have set_cookie method at final step. Type: {type(response)}")
         except Exception as e:
             app.logger.error(f"Error setting session cookie: {e}")
+            # Log the full traceback for debugging
+            import traceback
+            app.logger.error(f"Full traceback: {traceback.format_exc()}")
     
     def _generate_sid(self):
         """Generate a unique session ID."""
