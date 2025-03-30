@@ -6,7 +6,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import click
 from datetime import datetime, timedelta
-from flask_sessionstore import SqlAlchemyStore
+from flask_session import Session
 
 # Load environment variables
 load_dotenv()
@@ -48,9 +48,8 @@ app.config['SESSION_SQLALCHEMY_TABLE'] = 'dashboard_sessions'
 app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
-# Initialize Flask-Sessionstore
-from flask_sessionstore import Session
-session_store = Session(app)
+# Initialize Flask-Session
+Session(app)
 
 app.config['DISCORD_CLIENT_ID'] = os.getenv('DISCORD_CLIENT_ID')
 app.config['DISCORD_CLIENT_SECRET'] = os.getenv('DISCORD_CLIENT_SECRET')
