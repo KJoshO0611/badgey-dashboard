@@ -68,13 +68,17 @@ class Question:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                # Ensure options is in the expected format
+                # Ensure options is properly formatted for the database
                 if isinstance(options, list):
                     options_str = '|'.join(options)
+                elif isinstance(options, dict):
+                    # Convert dictionary to JSON string
+                    options_str = json.dumps(options)
                 elif isinstance(options, str):
+                    # Keep as is if already a string
                     options_str = options
                 else:
-                    options_str = ''
+                    options_str = json.dumps({})  # Empty JSON object as fallback
                 
                 # Use question_text column instead of question
                 cursor.execute(
@@ -118,13 +122,17 @@ class Question:
                     self.text = text
                 
                 if options is not None:
-                    # Ensure options is in the expected format
+                    # Ensure options is properly formatted for the database
                     if isinstance(options, list):
                         options_str = '|'.join(options)
+                    elif isinstance(options, dict):
+                        # Convert dictionary to JSON string
+                        options_str = json.dumps(options)
                     elif isinstance(options, str):
+                        # Keep as is if already a string
                         options_str = options
                     else:
-                        options_str = ''
+                        options_str = json.dumps({})  # Empty JSON object as fallback
                     
                     update_parts.append("options = %s")
                     params.append(options_str)
