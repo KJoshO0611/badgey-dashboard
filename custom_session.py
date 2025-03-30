@@ -106,7 +106,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             # Use raw SQL to avoid SQLAlchemy model issues
             conn = self.db.engine.connect()
             result = conn.execute(
-                sa.select([self.table.c.data, self.table.c.expires_at])
+                sa.select(self.table.c.data, self.table.c.expires_at)
                 .where(self.table.c.id == sid)
             ).fetchone()
             conn.close()
@@ -171,7 +171,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             
             # Check if the session already exists
             result = conn.execute(
-                sa.select([self.table.c.id])
+                sa.select(self.table.c.id)
                 .where(self.table.c.id == sid)
             ).fetchone()
             
