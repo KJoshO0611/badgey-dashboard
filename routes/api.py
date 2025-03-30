@@ -24,23 +24,23 @@ def get_quizzes():
             if current_user.has_role('admin'):
                 cursor.execute("""
                     SELECT q.quiz_id, q.quiz_name, q.creator_id, u.username as creator_name, 
-                           COUNT(qu.question_id) as question_count, q.created_at
+                           COUNT(qu.question_id) as question_count, q.creation_date
                     FROM quizzes q
                     LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
                     LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
                     GROUP BY q.quiz_id
-                    ORDER BY q.created_at DESC
+                    ORDER BY q.creation_date DESC
                 """)
             else:
                 cursor.execute("""
                     SELECT q.quiz_id, q.quiz_name, q.creator_id, u.username as creator_name, 
-                           COUNT(qu.question_id) as question_count, q.created_at
+                           COUNT(qu.question_id) as question_count, q.creation_date
                     FROM quizzes q
                     LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
                     LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
                     WHERE q.creator_id = %s
                     GROUP BY q.quiz_id
-                    ORDER BY q.created_at DESC
+                    ORDER BY q.creation_date DESC
                 """, (current_user.discord_id,))
                 
             quizzes = cursor.fetchall()
