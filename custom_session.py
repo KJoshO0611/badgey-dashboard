@@ -116,44 +116,56 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         # Look up the session in the database
         try:
             # Use raw SQL to avoid SQLAlchemy model issues
-            conn = self.db.engine.connect()
-            result = conn.execute(
-                sa.select(self.table.c.data, self.table.c.expires_at)
-                .where(self.table.c.id == sid)
-            ).fetchone()
-            conn.close()
+            conn = self.db.connect()
+            trans = conn.begin()  # Start a transaction explicitly
             
-            if result is None:
-                # No session found, create a new one
-                new_sid = self._generate_sid()
-                app.logger.debug(f"Session not found in DB, creating new session: {new_sid}")
-                return self.session_class(sid=new_sid, permanent=True)
-                
-            data, expires = result
-            
-            # Check if the session has expired
-            if expires is not None and expires < datetime.utcnow():
-                # Delete the expired session
-                conn = self.db.engine.connect()
-                conn.execute(self.table.delete().where(self.table.c.id == sid))
-                conn.close()
-                new_sid = self._generate_sid()
-                app.logger.debug(f"Session expired, creating new session: {new_sid}")
-                return self.session_class(sid=new_sid, permanent=True)
-                
-            # Load the data
             try:
-                if data:
-                    data = b64decode(data.encode('utf-8'))
-                    session_data = self.serializer.loads(data)
-                    app.logger.debug(f"Successfully loaded session data for sid: {sid}")
-                    return self.session_class(session_data, sid=sid, permanent=True)
-                else:
-                    app.logger.warning(f"Empty session data for sid: {sid}, creating new session")
+                result = conn.execute(
+                    sa.select(self.table.c.data, self.table.c.expires_at)
+                    .where(self.table.c.id == sid)
+                ).fetchone()
+                
+                trans.commit()  # Commit the read transaction
+                
+                if result is None:
+                    # No session found, create a new one
+                    new_sid = self._generate_sid()
+                    app.logger.debug(f"Session not found in DB, creating new session: {new_sid}")
+                    return self.session_class(sid=new_sid, permanent=True)
+                    
+                data, expires = result
+                
+                # Check if the session has expired
+                if expires is not None and expires < datetime.utcnow():
+                    app.logger.debug(f"Session expired, deleting: {sid}")
+                    self._delete_session(sid)  # This handles its own transaction
+                    
+                    new_sid = self._generate_sid()
+                    app.logger.debug(f"Creating new session after expiration: {new_sid}")
+                    return self.session_class(sid=new_sid, permanent=True)
+                    
+                # Load the data
+                try:
+                    if data:
+                        data = b64decode(data.encode('utf-8'))
+                        session_data = self.serializer.loads(data)
+                        app.logger.debug(f"Successfully loaded session data for sid: {sid}")
+                        return self.session_class(session_data, sid=sid, permanent=True)
+                    else:
+                        app.logger.warning(f"Empty session data for sid: {sid}, creating new session")
+                        return self.session_class(sid=sid, permanent=True)
+                except Exception as e:
+                    app.logger.error(f"Error deserializing session data: {e}")
                     return self.session_class(sid=sid, permanent=True)
+                    
             except Exception as e:
-                app.logger.error(f"Error deserializing session data: {e}")
-                return self.session_class(sid=sid, permanent=True)
+                # Rollback the transaction in case of error during read
+                trans.rollback()
+                app.logger.error(f"Database error while reading session: {e}")
+                new_sid = self._generate_sid()
+                return self.session_class(sid=new_sid, permanent=True)
+            finally:
+                conn.close()
         except Exception as e:
             # Log the error and create a new session
             app.logger.error(f"Error loading session: {e}")
@@ -206,39 +218,50 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         
         # Save the session to the database
         try:
-            conn = self.db.engine.connect()
+            conn = self.db.connect()
+            trans = conn.begin()  # Start a transaction explicitly
             
-            # Check if the session already exists
-            result = conn.execute(
-                sa.select(self.table.c.id)
-                .where(self.table.c.id == sid)
-            ).fetchone()
-            
-            if result is None:
-                # Insert a new session
-                app.logger.debug(f"Inserting new session record for sid: {sid}")
-                conn.execute(
-                    self.table.insert().values(
-                        id=sid,
-                        user_id=user_id,
-                        data=data,
-                        expires_at=expires
-                    )
-                )
-            else:
-                # Update the existing session
-                app.logger.debug(f"Updating existing session record for sid: {sid}")
-                conn.execute(
-                    self.table.update()
+            try:
+                # Check if the session already exists
+                result = conn.execute(
+                    sa.select(self.table.c.id)
                     .where(self.table.c.id == sid)
-                    .values(
-                        user_id=user_id,
-                        data=data,
-                        expires_at=expires
+                ).fetchone()
+                
+                if result is None:
+                    # Insert a new session
+                    app.logger.debug(f"Inserting new session record for sid: {sid}")
+                    conn.execute(
+                        self.table.insert().values(
+                            id=sid,
+                            user_id=user_id,
+                            data=data,
+                            expires_at=expires
+                        )
                     )
-                )
-            
-            conn.close()
+                else:
+                    # Update the existing session
+                    app.logger.debug(f"Updating existing session record for sid: {sid}")
+                    conn.execute(
+                        self.table.update()
+                        .where(self.table.c.id == sid)
+                        .values(
+                            user_id=user_id,
+                            data=data,
+                            expires_at=expires
+                        )
+                    )
+                
+                # Commit the transaction
+                trans.commit()
+                app.logger.debug(f"Session data committed to database for sid: {sid}")
+            except Exception as e:
+                # Rollback the transaction in case of error
+                trans.rollback()
+                app.logger.error(f"Error in database transaction, rolled back: {e}")
+                raise
+            finally:
+                conn.close()
         except Exception as e:
             app.logger.error(f"Error saving session to database: {e}")
             
@@ -275,8 +298,17 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
     def _delete_session(self, sid):
         """Delete a session from the database."""
         try:
-            conn = self.db.engine.connect()
-            conn.execute(self.table.delete().where(self.table.c.id == sid))
-            conn.close()
+            conn = self.db.connect()
+            trans = conn.begin()  # Start a transaction explicitly
+            
+            try:
+                conn.execute(self.table.delete().where(self.table.c.id == sid))
+                trans.commit()  # Commit the delete transaction
+                current_app.logger.debug(f"Deleted session: {sid}")
+            except Exception as e:
+                trans.rollback()  # Rollback on error
+                current_app.logger.error(f"Error deleting session, rolled back: {e}")
+            finally:
+                conn.close()
         except Exception as e:
             current_app.logger.error(f"Error deleting session: {e}") 
