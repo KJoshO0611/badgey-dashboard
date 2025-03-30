@@ -48,13 +48,13 @@ def quizzes():
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT q.quiz_id, q.quiz_name, 
-                       q.creator_username as creator, 
+                       q.user_name as creator, 
                        COUNT(DISTINCT us.id) as attempts, AVG(us.score) as avg_score,
                        COUNT(DISTINCT qu.question_id) as question_count
                 FROM quizzes q
                 LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
                 LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                GROUP BY q.quiz_id, q.quiz_name, q.creator_username
+                GROUP BY q.quiz_id, q.quiz_name, q.user_name
                 ORDER BY attempts DESC
             """)
             quiz_data = cursor.fetchall()
@@ -81,12 +81,12 @@ def users():
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT us.user_id as discord_id, us.creator_username as username, 
+                SELECT us.user_id as discord_id, us.user_name as username, 
                        COUNT(us.id) as quizzes_taken,
                        AVG(us.score) as avg_score,
                        MAX(us.completion_date) as last_active
                 FROM user_scores us
-                GROUP BY us.user_id, us.creator_username
+                GROUP BY us.user_id, us.user_name
                 ORDER BY quizzes_taken DESC
             """)
             user_data = cursor.fetchall()
@@ -276,7 +276,7 @@ def get_recent_activity(limit=10):
     try:
         with conn.cursor() as cursor:
             query = """
-            SELECT us.id, us.user_id, us.creator_username, q.quiz_id, q.quiz_name, us.score, us.completion_date
+            SELECT us.id, us.user_id, us.user_name, q.quiz_id, q.quiz_name, us.score, us.completion_date
             FROM user_scores us
             JOIN quizzes q ON us.quiz_id = q.quiz_id
             ORDER BY us.completion_date DESC
@@ -302,9 +302,9 @@ def get_user_stats():
         with conn.cursor() as cursor:
             # Top users by total score
             top_users_query = """
-            SELECT user_id, creator_username, SUM(score) as total_score, COUNT(*) as quiz_count
+            SELECT user_id, user_name, SUM(score) as total_score, COUNT(*) as quiz_count
             FROM user_scores
-            GROUP BY user_id, creator_username
+            GROUP BY user_id, user_name
             ORDER BY total_score DESC
             LIMIT 10
             """
