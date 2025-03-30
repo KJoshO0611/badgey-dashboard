@@ -276,7 +276,7 @@ def get_recent_activity(limit=10):
     try:
         with conn.cursor() as cursor:
             query = """
-            SELECT us.id, us.user_id, us.user_name, q.quiz_id, q.quiz_name, us.score, us.completion_date
+            SELECT us.id, us.user_id, us.user_name as username, q.quiz_id, q.quiz_name, us.score, us.completion_date
             FROM user_scores us
             JOIN quizzes q ON us.quiz_id = q.quiz_id
             ORDER BY us.completion_date DESC
