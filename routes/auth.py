@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 import json
-from flask import Blueprint, request, redirect, url_for, session, flash, render_template, current_app
+from flask import Blueprint, request, redirect, url_for, session, flash, render_template, current_app, make_response
 from flask_login import login_user, logout_user, login_required, current_user
 from requests_oauthlib import OAuth2Session
 from models.user import User
@@ -57,9 +57,11 @@ def login():
     client_id = current_app.config['DISCORD_CLIENT_ID']
     redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
     scope = 'email identify'
+    
+    # Generate a new state for CSRF protection
     state = os.urandom(16).hex()
     
-    # Store state for CSRF protection
+    # Store state both in session and in a cookie as backup
     session['oauth2_state'] = state
     
     # Build URL in exact order: base -> client_id -> response_type -> redirect -> scope
@@ -73,8 +75,11 @@ def login():
     )
     
     logger.info(f"Generated Discord OAuth URL with redirect URI: {redirect_uri}")
-        
-    return render_template('login.html', discord_oauth_url=authorization_url)
+    
+    # Set a cookie with the state as backup in case the session is lost
+    response = make_response(render_template('login.html', discord_oauth_url=authorization_url))
+    response.set_cookie('oauth2_state_backup', state, httponly=True, max_age=600, samesite='Lax')
+    return response
 
 @auth_bp.route('/auth/callback')
 def auth_callback():
@@ -87,20 +92,25 @@ def auth_callback():
     # Check for state parameter - with more graceful handling for missing state
     state_from_request = request.args.get('state')
     state_from_session = session.get('oauth2_state')
+    state_from_cookie = request.cookies.get('oauth2_state_backup')
     
     if not state_from_request:
         logger.error("Missing state parameter in request")
         flash("Authentication error: Missing state parameter in request", 'warning')
         return redirect(url_for('auth.login'))
     
-    if not state_from_session:
-        logger.error("Missing oauth2_state in session - session may have been lost or expired")
-        flash("Authentication error: Your session has expired. Please try logging in again.", 'warning')
-        return redirect(url_for('auth.login'))
+    # Try to validate using either session or cookie state
+    valid_state = False
+    if state_from_session and state_from_request == state_from_session:
+        valid_state = True
+        logger.info("Validated OAuth state using session")
+    elif state_from_cookie and state_from_request == state_from_cookie:
+        valid_state = True
+        logger.info("Validated OAuth state using backup cookie")
     
-    if state_from_request != state_from_session:
-        logger.error(f"State mismatch in OAuth callback: {state_from_request} vs {state_from_session}")
-        flash("Authentication error: Invalid state parameter", 'warning')
+    if not valid_state:
+        logger.error(f"State validation failed: request={state_from_request}, session={state_from_session}, cookie={state_from_cookie}")
+        flash("Authentication error: Invalid state parameter. Please try logging in again.", 'warning')
         return redirect(url_for('auth.login'))
     
     # Get authorization code
@@ -204,10 +214,12 @@ def auth_callback():
             logger.error(f"Error logging user login: {str(e)}")
         
         next_url = session.pop('next', None)
-        if next_url:
-            return redirect(next_url)
+        redirect_target = next_url if next_url else url_for('dashboard')
         
-        return redirect(url_for('dashboard'))
+        # Create response and clean up state cookie
+        response = make_response(redirect(redirect_target))
+        response.delete_cookie('oauth2_state_backup')
+        return response
     except Exception as e:
         logger.error(f"Error during Discord authentication: {str(e)}")
         flash("An error occurred during login. Please try again.", 'danger')
