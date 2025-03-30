@@ -137,53 +137,53 @@ def api_quiz_completions():
 def get_summary_metrics():
     """Get summary metrics for the dashboard"""
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        # Total quizzes
-        cursor.execute("SELECT COUNT(*) as count FROM quizzes")
-        total_quizzes = cursor.fetchone()['count']
-        
-        # Total questions
-        cursor.execute("SELECT COUNT(*) as count FROM questions")
-        total_questions = cursor.fetchone()['count']
-        
-        # Total quiz attempts
-        cursor.execute("SELECT COUNT(*) as count FROM user_scores")
-        total_attempts = cursor.fetchone()['count']
-        
-        # Total users
-        cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM user_scores")
-        total_users = cursor.fetchone()['count']
-        
-        # Average score
-        cursor.execute("SELECT AVG(score) as avg_score FROM user_scores")
-        avg_score = cursor.fetchone()['avg_score'] or 0
-        
-        # Quiz attempts today
-        today = datetime.now().date()
-        cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(timestamp) = %s", (today,))
-        attempts_today = cursor.fetchone()['count']
-        
-        # Calculate daily trend (% increase/decrease from yesterday)
-        yesterday = today - timedelta(days=1)
-        cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(timestamp) = %s", (yesterday,))
-        attempts_yesterday = cursor.fetchone()['count']
-        
-        if attempts_yesterday > 0:
-            daily_trend = ((attempts_today - attempts_yesterday) / attempts_yesterday) * 100
-        else:
-            daily_trend = 100 if attempts_today > 0 else 0
-        
-        return {
-            'total_quizzes': total_quizzes,
-            'total_questions': total_questions,
-            'total_attempts': total_attempts,
-            'total_users': total_users,
-            'avg_score': round(avg_score, 2),
-            'attempts_today': attempts_today,
-            'daily_trend': round(daily_trend, 2)
-        }
+        with conn.cursor() as cursor:
+            # Total quizzes
+            cursor.execute("SELECT COUNT(*) as count FROM quizzes")
+            total_quizzes = cursor.fetchone()['count']
+            
+            # Total questions
+            cursor.execute("SELECT COUNT(*) as count FROM questions")
+            total_questions = cursor.fetchone()['count']
+            
+            # Total quiz attempts
+            cursor.execute("SELECT COUNT(*) as count FROM user_scores")
+            total_attempts = cursor.fetchone()['count']
+            
+            # Total users
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM user_scores")
+            total_users = cursor.fetchone()['count']
+            
+            # Average score
+            cursor.execute("SELECT AVG(score) as avg_score FROM user_scores")
+            avg_score = cursor.fetchone()['avg_score'] or 0
+            
+            # Quiz attempts today
+            today = datetime.now().date()
+            cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(completed_at) = %s", (today,))
+            attempts_today = cursor.fetchone()['count']
+            
+            # Calculate daily trend (% increase/decrease from yesterday)
+            yesterday = today - timedelta(days=1)
+            cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(completed_at) = %s", (yesterday,))
+            attempts_yesterday = cursor.fetchone()['count']
+            
+            if attempts_yesterday > 0:
+                daily_trend = ((attempts_today - attempts_yesterday) / attempts_yesterday) * 100
+            else:
+                daily_trend = 100 if attempts_today > 0 else 0
+            
+            return {
+                'total_quizzes': total_quizzes,
+                'total_questions': total_questions,
+                'total_attempts': total_attempts,
+                'total_users': total_users,
+                'avg_score': round(avg_score, 2),
+                'attempts_today': attempts_today,
+                'daily_trend': round(daily_trend, 2)
+            }
     except Exception as e:
         logger.error(f"Error getting summary metrics: {e}")
         # Return default values on error
@@ -197,103 +197,99 @@ def get_summary_metrics():
             'daily_trend': 0
         }
     finally:
-        cursor.close()
         conn.close()
 
 def get_top_quizzes(limit=10):
     """Get top quizzes by number of attempts"""
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        query = """
-        SELECT q.quiz_id, q.quiz_name, COUNT(*) as attempts, AVG(us.score) as avg_score
-        FROM quizzes q
-        JOIN user_scores us ON q.quiz_id = us.quiz_id
-        GROUP BY q.quiz_id, q.quiz_name
-        ORDER BY attempts DESC
-        LIMIT %s
-        """
-        cursor.execute(query, (limit,))
-        return cursor.fetchall()
+        with conn.cursor() as cursor:
+            query = """
+            SELECT q.quiz_id, q.quiz_name, COUNT(*) as attempts, AVG(us.score) as avg_score
+            FROM quizzes q
+            JOIN user_scores us ON q.quiz_id = us.quiz_id
+            GROUP BY q.quiz_id, q.quiz_name
+            ORDER BY attempts DESC
+            LIMIT %s
+            """
+            cursor.execute(query, (limit,))
+            return cursor.fetchall()
     except Exception as e:
         logger.error(f"Error getting top quizzes: {e}")
         return []
     finally:
-        cursor.close()
         conn.close()
 
 def get_recent_activity(limit=10):
     """Get recent quiz activity"""
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        query = """
-        SELECT us.score_id, us.user_id, us.username, q.quiz_id, q.quiz_name, us.score, us.timestamp
-        FROM user_scores us
-        JOIN quizzes q ON us.quiz_id = q.quiz_id
-        ORDER BY us.timestamp DESC
-        LIMIT %s
-        """
-        cursor.execute(query, (limit,))
-        activity = cursor.fetchall()
-        
-        # Convert timestamp to string for JSON serialization
-        for entry in activity:
-            entry['timestamp'] = entry['timestamp'].isoformat() if entry['timestamp'] else None
-        
-        return activity
+        with conn.cursor() as cursor:
+            query = """
+            SELECT us.score_id, us.user_id, us.username, q.quiz_id, q.quiz_name, us.score, us.completed_at
+            FROM user_scores us
+            JOIN quizzes q ON us.quiz_id = q.quiz_id
+            ORDER BY us.completed_at DESC
+            LIMIT %s
+            """
+            cursor.execute(query, (limit,))
+            activity = cursor.fetchall()
+            
+            # Convert timestamp to string for JSON serialization
+            for entry in activity:
+                entry['completed_at'] = entry['completed_at'].isoformat() if entry['completed_at'] else None
+            
+            return activity
     except Exception as e:
         logger.error(f"Error getting recent activity: {e}")
         return []
     finally:
-        cursor.close()
         conn.close()
 
 def get_user_stats():
     """Get user statistics"""
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        # Top users by total score
-        top_users_query = """
-        SELECT user_id, username, SUM(score) as total_score, COUNT(*) as quiz_count
-        FROM user_scores
-        GROUP BY user_id, username
-        ORDER BY total_score DESC
-        LIMIT 10
-        """
-        cursor.execute(top_users_query)
-        top_users = cursor.fetchall()
-        
-        # Get active hours (when quizzes are taken)
-        active_hours_query = """
-        SELECT HOUR(timestamp) as hour, COUNT(*) as count
-        FROM user_scores
-        GROUP BY HOUR(timestamp)
-        ORDER BY hour
-        """
-        cursor.execute(active_hours_query)
-        active_hours = cursor.fetchall()
-        
-        # Format for chart
-        hours_data = [0] * 24
-        for entry in active_hours:
-            hour = entry['hour']
-            if 0 <= hour < 24:
-                hours_data[hour] = entry['count']
-        
-        return {
-            'top_users': top_users,
-            'active_hours': hours_data
-        }
+        with conn.cursor() as cursor:
+            # Top users by total score
+            top_users_query = """
+            SELECT user_id, username, SUM(score) as total_score, COUNT(*) as quiz_count
+            FROM user_scores
+            GROUP BY user_id, username
+            ORDER BY total_score DESC
+            LIMIT 10
+            """
+            cursor.execute(top_users_query)
+            top_users = cursor.fetchall()
+            
+            # Get active hours (when quizzes are taken)
+            active_hours_query = """
+            SELECT HOUR(completed_at) as hour, COUNT(*) as count
+            FROM user_scores
+            GROUP BY HOUR(completed_at)
+            ORDER BY hour
+            """
+            cursor.execute(active_hours_query)
+            active_hours = cursor.fetchall()
+            
+            # Format for chart
+            hours_data = [0] * 24
+            for entry in active_hours:
+                hour = entry['hour']
+                if 0 <= hour < 24:
+                    hours_data[hour] = entry['count']
+            
+            return {
+                'top_users': top_users,
+                'active_hours': hours_data
+            }
     except Exception as e:
         logger.error(f"Error getting user stats: {e}")
         return {'top_users': [], 'active_hours': [0] * 24}
     finally:
-        cursor.close()
         conn.close()
 
 def get_quiz_activity(days=30):
@@ -315,10 +311,10 @@ def get_quiz_activity(days=30):
         
         # Query activity by date
         query = """
-        SELECT DATE(timestamp) as date, COUNT(*) as count
+        SELECT DATE(completed_at) as date, COUNT(*) as count
         FROM user_scores
-        WHERE timestamp >= %s AND timestamp < %s
-        GROUP BY DATE(timestamp)
+        WHERE completed_at >= %s AND completed_at < %s
+        GROUP BY DATE(completed_at)
         ORDER BY date
         """
         cursor.execute(query, (start_date, end_date + timedelta(days=1)))
@@ -356,10 +352,10 @@ def get_user_activity(days=30):
         
         # Query unique users by date
         query = """
-        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as count
+        SELECT DATE(completed_at) as date, COUNT(DISTINCT user_id) as count
         FROM user_scores
-        WHERE timestamp >= %s AND timestamp < %s
-        GROUP BY DATE(timestamp)
+        WHERE completed_at >= %s AND completed_at < %s
+        GROUP BY DATE(completed_at)
         ORDER BY date
         """
         cursor.execute(query, (start_date, end_date + timedelta(days=1)))

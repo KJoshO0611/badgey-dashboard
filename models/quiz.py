@@ -17,6 +17,16 @@ class Quiz:
         self.creator_id = creator_id
         self.created_at = created_at or datetime.now()
     
+    @property
+    def quiz_id(self):
+        """For backwards compatibility with templates using quiz.quiz_id"""
+        return self.id
+    
+    @property
+    def quiz_name(self):
+        """For backwards compatibility with templates using quiz.quiz_name"""
+        return self.name
+    
     def to_dict(self):
         """Convert quiz to dictionary for JSON serialization"""
         return {

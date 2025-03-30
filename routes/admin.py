@@ -7,6 +7,7 @@ from models.user import User
 from decorators import admin_required
 import os
 import subprocess
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,102 @@ def system():
     """System settings"""
     return render_template('admin/system.html')
 
+@admin_bp.route('/create_backup')
+@login_required
+@admin_required
+def create_backup():
+    """Create database backup"""
+    try:
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"backup_{timestamp}.sql"
+        backup_path = os.path.join(current_app.root_path, 'backups', backup_filename)
+        
+        # Ensure backup directory exists
+        os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+        
+        # Get database credentials from config
+        db_config = current_app.config['DATABASE']
+        
+        # Build mysqldump command
+        cmd = [
+            'mysqldump',
+            f"--host={db_config['host']}",
+            f"--port={db_config['port']}",
+            f"--user={db_config['user']}",
+            f"--password={db_config['password']}",
+            db_config['database']
+        ]
+        
+        # Execute command and save output to file
+        with open(backup_path, 'w') as f:
+            subprocess.run(cmd, stdout=f, check=True)
+        
+        # Log the action
+        logger.info(f"Database backup created: {backup_filename}")
+        
+        # Return the file for download
+        return send_file(
+            backup_path,
+            as_attachment=True,
+            download_name=backup_filename,
+            mimetype='application/sql'
+        )
+    except Exception as e:
+        logger.error(f"Error creating backup: {e}")
+        flash(f"Error creating backup: {e}", "danger")
+        return redirect(url_for('admin.system'))
+
+@admin_bp.route('/restore_backup', methods=['POST'])
+@login_required
+@admin_required
+def restore_backup():
+    """Restore database from backup"""
+    if 'backup_file' not in request.files:
+        flash("No backup file provided", "danger")
+        return redirect(url_for('admin.system'))
+    
+    backup_file = request.files['backup_file']
+    
+    if backup_file.filename == '':
+        flash("No backup file selected", "danger")
+        return redirect(url_for('admin.system'))
+    
+    try:
+        # Create temporary file to store uploaded backup
+        temp_backup_path = os.path.join(current_app.root_path, 'backups', 'temp_restore.sql')
+        os.makedirs(os.path.dirname(temp_backup_path), exist_ok=True)
+        backup_file.save(temp_backup_path)
+        
+        # Get database credentials from config
+        db_config = current_app.config['DATABASE']
+        
+        # Build mysql command to restore
+        cmd = [
+            'mysql',
+            f"--host={db_config['host']}",
+            f"--port={db_config['port']}",
+            f"--user={db_config['user']}",
+            f"--password={db_config['password']}",
+            db_config['database'],
+            '-e', f"source {temp_backup_path}"
+        ]
+        
+        # Execute command
+        subprocess.run(cmd, check=True)
+        
+        # Clean up
+        os.remove(temp_backup_path)
+        
+        # Log the action
+        logger.info(f"Database restored from backup")
+        flash("Database restored successfully", "success")
+    except Exception as e:
+        logger.error(f"Error restoring backup: {e}")
+        flash(f"Error restoring backup: {e}", "danger")
+    
+    return redirect(url_for('admin.system'))
+
 @admin_bp.route('/logs')
 @login_required
 @admin_required
@@ -373,23 +470,67 @@ def create_admin():
 def api_user_roles():
     """API endpoint to get user roles"""
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
     
     try:
-        query = "SELECT id, discord_id, username, roles FROM dashboard_users"
-        cursor.execute(query)
-        users = cursor.fetchall()
-        
-        # Parse roles from JSON
-        for user in users:
-            user['roles'] = json.loads(user.get('roles', '[]'))
-            # Add an is_admin property for the UI to use
-            user['is_admin'] = 'admin' in user['roles']
-        
-        return jsonify(users)
+        with conn.cursor() as cursor:
+            query = "SELECT id, discord_id, username, roles FROM dashboard_users"
+            cursor.execute(query)
+            users = cursor.fetchall()
+            
+            # Parse roles from JSON
+            for user in users:
+                user['roles'] = json.loads(user.get('roles', '[]'))
+                # Add an is_admin property for the UI to use
+                user['is_admin'] = 'admin' in user['roles']
+            
+            return jsonify(users)
     finally:
-        cursor.close()
         conn.close()
+
+@admin_bp.route('/api/update_user_roles', methods=['POST'])
+@login_required
+@admin_required
+def update_user_roles():
+    """Update user roles via API"""
+    if not request.is_json:
+        return jsonify({'error': 'Missing JSON data'}), 400
+    
+    data = request.json
+    user_id = data.get('user_id')
+    roles = data.get('roles', [])
+    
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
+    
+    try:
+        conn = get_db()
+        with conn.cursor() as cursor:
+            # Update user roles
+            cursor.execute(
+                "UPDATE dashboard_users SET roles = %s WHERE id = %s",
+                (json.dumps(roles), user_id)
+            )
+            conn.commit()
+            
+            # Log the action
+            cursor.execute(
+                """
+                INSERT INTO dashboard_logs (user_id, action, details, ip_address)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    current_user.id,
+                    "update_user_roles",
+                    f"Updated roles for user ID {user_id} via API",
+                    request.remote_addr
+                )
+            )
+            conn.commit()
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error updating user roles via API: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/update_settings', methods=['POST'])
 @login_required
