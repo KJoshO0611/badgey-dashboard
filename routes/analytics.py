@@ -48,13 +48,13 @@ def quizzes():
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT q.quiz_id, q.quiz_name, 
-                       q.creator_username as creator, 
+                       q.user_name as creator, 
                        COUNT(DISTINCT us.id) as attempts, AVG(us.score) as avg_score,
                        COUNT(DISTINCT qu.question_id) as question_count
                 FROM quizzes q
                 LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
                 LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                GROUP BY q.quiz_id, q.quiz_name, q.creator_username
+                GROUP BY q.quiz_id, q.quiz_name, q.user_name
                 ORDER BY attempts DESC
             """)
             quiz_data = cursor.fetchall()
@@ -304,7 +304,7 @@ def get_user_stats():
             top_users_query = """
             SELECT user_id, user_name, SUM(score) as total_score, COUNT(*) as quiz_count
             FROM user_scores
-            GROUP BY user_id, creator_username
+            GROUP BY user_id, user_name
             ORDER BY total_score DESC
             LIMIT 10
             """
