@@ -12,12 +12,12 @@ import gzip
 from io import BytesIO
 import functools
 from flask_session import Session
-from flask_caching import Cache
+# Only import extensions that are actually used
+# from flask_caching import Cache  
 from flask_compress import Compress
 from flask_wtf.csrf import CSRFProtect
-from db_utils import init_db, init_user_table
+from models.db import get_db, init_db
 from models.user import User, init_user_table
-from models.db import get_db
 from routes.auth import auth_bp
 from routes.quizzes import quizzes_bp
 from routes.analytics import analytics_bp
