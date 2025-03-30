@@ -186,29 +186,33 @@ def edit_user(user_id):
         flash("An error occurred while editing the user.", "danger")
         return redirect(url_for('admin.users'))
 
-@admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@admin_bp.route('/delete_user', methods=['POST'])
 @login_required
 @admin_required
-def delete_user(user_id):
+def delete_user():
     """Delete user"""
+    user_id = request.form.get('user_id')
+    if not user_id:
+        flash('User ID is required', 'error')
+        return redirect(url_for('admin.users'))
+    
     # Prevent self-deletion
-    if user_id == current_user.id:
+    if int(user_id) == current_user.id:
         flash('You cannot delete your own account', 'error')
         return redirect(url_for('admin.users'))
     
     conn = get_db()
-    cursor = conn.cursor()
-    
     try:
-        query = "DELETE FROM dashboard_users WHERE id = %s"
-        cursor.execute(query, (user_id,))
-        conn.commit()
-        
-        flash('User deleted successfully', 'success')
+        with conn.cursor() as cursor:
+            query = "DELETE FROM dashboard_users WHERE id = %s"
+            cursor.execute(query, (user_id,))
+            conn.commit()
+            
+            flash('User deleted successfully', 'success')
     except Exception as e:
         flash(f'Error deleting user: {e}', 'error')
+        logger.error(f"Error deleting user: {e}")
     finally:
-        cursor.close()
         conn.close()
     
     return redirect(url_for('admin.users'))
@@ -531,6 +535,50 @@ def update_user_roles():
     except Exception as e:
         logger.error(f"Error updating user roles via API: {e}")
         return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/update_user_roles', methods=['POST'])
+@login_required
+@admin_required
+def update_user_roles():
+    """Update user roles via web form"""
+    user_id = request.form.get('user_id')
+    roles = request.form.getlist('roles')
+    
+    if not user_id:
+        flash('User ID is required', 'danger')
+        return redirect(url_for('admin.users'))
+    
+    try:
+        conn = get_db()
+        with conn.cursor() as cursor:
+            # Update user roles
+            cursor.execute(
+                "UPDATE dashboard_users SET roles = %s WHERE id = %s",
+                (json.dumps(roles), user_id)
+            )
+            conn.commit()
+            
+            # Log the action
+            cursor.execute(
+                """
+                INSERT INTO dashboard_logs (user_id, action, details, ip_address)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    current_user.id,
+                    "update_user_roles",
+                    f"Updated roles for user ID {user_id}",
+                    request.remote_addr
+                )
+            )
+            conn.commit()
+            
+        flash("User roles updated successfully!", "success")
+    except Exception as e:
+        logger.error(f"Error updating user roles: {e}")
+        flash(f"Error updating user roles: {e}", "danger")
+    
+    return redirect(url_for('admin.users'))
 
 @admin_bp.route('/update_settings', methods=['POST'])
 @login_required

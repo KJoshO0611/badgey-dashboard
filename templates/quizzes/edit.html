@@ -75,7 +75,7 @@
                                                     <div class="input-group-text">
                                                         <input class="form-check-input mt-0" type="radio" name="correct_answer" value="{{ loop.index0 }}" {% if loop.index0 == question.correct_answer|int %}checked{% endif %} required>
                                                     </div>
-                                                    <input type="text" class="form-control" name="options[]" value="{{ option }}" required>
+                                                    <input type="text" class="form-control" name="option{{ loop.index0 }}" value="{{ option }}" required>
                                                     {% if loop.index > 2 %}
                                                         <button type="button" class="btn btn-outline-danger remove-option">
                                                             <i class="fas fa-times"></i>
@@ -138,13 +138,13 @@
                         <div class="input-group-text">
                             <input class="form-check-input mt-0" type="radio" name="correct_answer" value="0" checked required>
                         </div>
-                        <input type="text" class="form-control" name="options[]" placeholder="Option 1" required>
+                        <input type="text" class="form-control" name="option0" placeholder="Option 1" required>
                     </div>
                     <div class="input-group mb-2">
                         <div class="input-group-text">
                             <input class="form-check-input mt-0" type="radio" name="correct_answer" value="1" required>
                         </div>
-                        <input type="text" class="form-control" name="options[]" placeholder="Option 2" required>
+                        <input type="text" class="form-control" name="option1" placeholder="Option 2" required>
                     </div>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary add-option" data-container="newOptionsContainer">
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="input-group-text">
                     <input class="form-check-input mt-0" type="radio" name="correct_answer" value="${optionCount}" required>
                 </div>
-                <input type="text" class="form-control" name="options[]" placeholder="Option ${optionCount + 1}" required>
+                <input type="text" class="form-control" name="option${optionCount}" placeholder="Option ${optionCount + 1}" required>
                 <button type="button" class="btn btn-outline-danger remove-option">
                     <i class="fas fa-times"></i>
                 </button>

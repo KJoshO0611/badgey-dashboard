@@ -267,12 +267,13 @@ def edit_question(quiz_id, question_id):
         question_text = request.form.get('question')
         options = []
         
-        # Get options dynamically - find all option inputs in the form
-        for key in request.form:
-            if key.startswith('option') and key[6:].isdigit():
-                value = request.form.get(key)
-                if value.strip():  # Only add non-empty options
-                    options.append(value)
+        # Get options dynamically
+        i = 0
+        while f'option{i}' in request.form:
+            option = request.form.get(f'option{i}')
+            if option.strip():  # Only add non-empty options
+                options.append(option)
+            i += 1
         
         # Get correct answer and score
         correct_answer = request.form.get('correct_answer', 0)
