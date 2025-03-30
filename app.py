@@ -108,15 +108,18 @@ def format_datetime(value, format='%Y-%m-%d %H:%M'):
 # Add browser caching headers for static content
 @app.after_request
 def add_cache_headers(response):
-    # Only add cache headers to successful responses
+    # Only add cache headers if response has a status_code attribute
     if not hasattr(response, 'status_code'):
         return response
         
+    # Apply caching to successful responses
     if response.status_code < 400:
-        # Static files (CSS, JS, images)
+        # Special handling for static files
         if request.path.startswith('/static/'):
             # Cache for 1 week
             response.headers['Cache-Control'] = 'public, max-age=604800'
+            # Don't try to modify these responses further
+            return response
         elif request.path.startswith('/assets/'):
             # Cache for 1 day
             response.headers['Cache-Control'] = 'public, max-age=86400'
@@ -130,11 +133,19 @@ def add_cache_headers(response):
     
     return response
 
-# Apply gzip compression to all responses
+# Apply gzip compression to all responses - but skip static files
 @app.after_request
 def apply_gzip_compression(response):
+    # Skip compression for static files completely
+    if request.path.startswith(('/static/', '/assets/')):
+        return response
+        
     # Guard against ClosingIterator responses that don't have status_code
     if not hasattr(response, 'status_code'):
+        return response
+    
+    # Don't try to compress responses in direct passthrough mode
+    if hasattr(response, 'direct_passthrough') and response.direct_passthrough:
         return response
         
     # Don't compress small responses or already compressed responses
@@ -148,16 +159,20 @@ def apply_gzip_compression(response):
     if 'gzip' not in request.headers.get('Accept-Encoding', ''):
         return response
         
-    # Compress the response
-    gzip_buffer = BytesIO()
-    with gzip.GzipFile(mode='wb', fileobj=gzip_buffer) as gzip_file:
-        gzip_file.write(response.get_data())
-    
-    # Update response with compressed data
-    response.set_data(gzip_buffer.getvalue())
-    response.headers['Content-Encoding'] = 'gzip'
-    response.headers['Content-Length'] = len(response.get_data())
-    response.headers['Vary'] = 'Accept-Encoding'
+    try:
+        # Compress the response
+        gzip_buffer = BytesIO()
+        with gzip.GzipFile(mode='wb', fileobj=gzip_buffer) as gzip_file:
+            gzip_file.write(response.get_data())
+        
+        # Update response with compressed data
+        response.set_data(gzip_buffer.getvalue())
+        response.headers['Content-Encoding'] = 'gzip'
+        response.headers['Content-Length'] = len(response.get_data())
+        response.headers['Vary'] = 'Accept-Encoding'
+    except Exception as e:
+        # If compression fails for any reason, log it and return the original response
+        app.logger.error(f"Error compressing response: {e}")
     
     return response
 
