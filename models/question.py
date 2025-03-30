@@ -84,7 +84,7 @@ class Question:
                 
                 # Create the question
                 cursor.execute(
-                    "INSERT INTO questions (quiz_id, question, options, correct_answer, score, explanation) VALUES (%s, %s, %s, %s, %s, %s)",
+                    "INSERT INTO questions (quiz_id, question_text, options, correct_answer, score, explanation) VALUES (%s, %s, %s, %s, %s, %s)",
                     (quiz_id, text, options_json, str(correct_answer), score, explanation)
                 )
                 conn.commit()
@@ -107,7 +107,7 @@ class Question:
                 params = []
                 
                 if text is not None:
-                    update_parts.append("question = %s")
+                    update_parts.append("question_text = %s")
                     params.append(text)
                     self.text = text
                 
