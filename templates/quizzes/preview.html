@@ -64,10 +64,11 @@
                             <h5 class="card-title mb-4">{{ question.text }}</h5>
                             
                             <div class="options-container">
+                                {% set question_index = loop.index %}
                                 {% for option in question.options %}
                                     <div class="form-check mb-3">
-                                        <input class="form-check-input" type="radio" name="question{{ loop.parent.loop.index }}" id="q{{ loop.parent.loop.index }}option{{ loop.index }}" value="{{ loop.index0 }}" data-correct="{{ loop.index0 == question.correct_answer|int }}">
-                                        <label class="form-check-label" for="q{{ loop.parent.loop.index }}option{{ loop.index }}">
+                                        <input class="form-check-input" type="radio" name="question{{ question_index }}" id="q{{ question_index }}option{{ loop.index }}" value="{{ loop.index0 }}" data-correct="{{ loop.index0 == question.correct_answer|int }}">
+                                        <label class="form-check-label" for="q{{ question_index }}option{{ loop.index }}">
                                             {{ option }}
                                         </label>
                                     </div>
