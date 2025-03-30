@@ -76,10 +76,10 @@
                             <div class="accordion-body">
                                 <h6>Options:</h6>
                                 <ul class="list-group mb-3">
-                                    {% for option in question.options %}
-                                        <li class="list-group-item {% if loop.index0 == question.correct_answer|int %}list-group-item-success{% endif %}">
-                                            {{ option }}
-                                            {% if loop.index0 == question.correct_answer|int %}
+                                    {% for letter, option_text in question.options.items() %}
+                                        <li class="list-group-item {% if letter == question.correct_answer %}list-group-item-success{% endif %}">
+                                            {{ letter }}. {{ option_text }}
+                                            {% if letter == question.correct_answer %}
                                                 <span class="badge bg-success float-end">Correct Answer</span>
                                             {% endif %}
                                         </li>

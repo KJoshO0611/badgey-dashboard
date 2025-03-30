@@ -312,7 +312,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show next button, hide check answer button
             this.style.display = 'none';
-            questionSlide.querySelector('.next-btn').style.display = 'block';
+            const nextBtn = questionSlide.querySelector('.next-btn');
+            if (nextBtn) {
+                nextBtn.style.display = 'block';
+            } else {
+                console.error('Next button not found in question slide');
+            }
         });
     });
     

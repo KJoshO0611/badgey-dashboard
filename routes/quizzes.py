@@ -198,29 +198,38 @@ def add_question(quiz_id):
         # Extract form data
         question_text = request.form.get('question')
         
-        # Process lettered options (A, B, C, etc.)
+        # Extract the options from the form
         options = {}
-        letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-        for letter in letters:
-            if f'option{letter}' in request.form:
-                option_value = request.form.get(f'option{letter}')
-                if option_value.strip():  # Only add non-empty options
-                    options[letter] = option_value
+        correct_answer = request.form.get('correct_answer')
+        
+        # Build options dictionary with letter keys
+        for key, value in request.form.items():
+            if key.startswith('option') and len(key) > 6:
+                letter = key[6:]  # Extract the letter (A, B, C, etc.)
+                if value.strip():  # Only add non-empty options
+                    options[letter] = value.strip()
         
         # Get correct answer and score
-        correct_answer = request.form.get('correct_answer', 'A')
         score = request.form.get('score', 10)
         explanation = request.form.get('explanation', '')
         
         # Validate inputs
         if not question_text:
-            flash("Question text is required.", "danger")
+            flash('Question text is required', 'danger')
             return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
-            
+        
         if len(options) < 2:
-            flash("At least two options are required.", "danger")
+            flash('At least two options are required', 'danger')
             return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
-            
+        
+        if not correct_answer or correct_answer not in options:
+            flash('A valid correct answer must be selected', 'danger')
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        if not score or int(score) < 1:
+            flash('Score must be at least 1 point', 'danger')
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
         # Add the question
         logger.info(f"Creating question for quiz {quiz_id}")
         quiz.add_question(
@@ -266,27 +275,36 @@ def edit_question(quiz_id, question_id):
         # Extract form data
         question_text = request.form.get('question')
         
-        # Process lettered options (A, B, C, etc.)
+        # Extract the options from the form
         options = {}
-        letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-        for letter in letters:
-            if f'option{letter}' in request.form:
-                option_value = request.form.get(f'option{letter}')
-                if option_value.strip():  # Only add non-empty options
-                    options[letter] = option_value
+        correct_answer = request.form.get('correct_answer')
+        
+        # Build options dictionary with letter keys
+        for key, value in request.form.items():
+            if key.startswith('option') and len(key) > 6:
+                letter = key[6:]  # Extract the letter (A, B, C, etc.)
+                if value.strip():  # Only add non-empty options
+                    options[letter] = value.strip()
         
         # Get correct answer and score
-        correct_answer = request.form.get('correct_answer', 'A')
         score = request.form.get('score', 10)
         explanation = request.form.get('explanation', '')
         
         # Validate inputs
         if not question_text:
-            flash("Question text is required.", "danger")
+            flash('Question text is required', 'danger')
             return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
-            
+        
         if len(options) < 2:
-            flash("At least two options are required.", "danger")
+            flash('At least two options are required', 'danger')
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        if not correct_answer or correct_answer not in options:
+            flash('A valid correct answer must be selected', 'danger')
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        if not score or int(score) < 1:
+            flash('Score must be at least 1 point', 'danger')
             return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
         
         # Update the question
