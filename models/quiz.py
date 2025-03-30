@@ -45,10 +45,8 @@ class Quiz:
         try:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT q.*, u.username as creator_username 
-                    FROM quizzes q
-                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                    WHERE q.quiz_id = %s
+                    SELECT * FROM quizzes
+                    WHERE quiz_id = %s
                 """, (quiz_id,))
                 quiz_data = cursor.fetchone()
                 
@@ -79,10 +77,8 @@ class Quiz:
         try:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT q.*, u.username as creator_username 
-                    FROM quizzes q
-                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                    ORDER BY q.quiz_id DESC
+                    SELECT * FROM quizzes
+                    ORDER BY quiz_id DESC
                 """)
                 quizzes = cursor.fetchall()
                 
@@ -113,11 +109,9 @@ class Quiz:
         try:
             with conn.cursor() as cursor:
                 cursor.execute("""
-                    SELECT q.*, u.username as creator_username 
-                    FROM quizzes q
-                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                    WHERE q.creator_id = %s 
-                    ORDER BY q.quiz_id DESC
+                    SELECT * FROM quizzes
+                    WHERE creator_id = %s 
+                    ORDER BY quiz_id DESC
                 """, (creator_id,))
                 quizzes = cursor.fetchall()
                 
@@ -142,12 +136,24 @@ class Quiz:
             return []
     
     @staticmethod
-    def create(name, creator_id):
+    def create(name, creator_id, creator_username=None):
         """Create a new quiz"""
         conn = get_db()
         with conn.cursor() as cursor:
-            query = "INSERT INTO quizzes (quiz_name, creator_id) VALUES (%s, %s)"
-            cursor.execute(query, (name, creator_id))
+            # If creator_username is not provided, try to fetch it
+            if creator_username is None:
+                try:
+                    with conn.cursor() as user_cursor:
+                        user_cursor.execute("SELECT username FROM dashboard_users WHERE discord_id = %s", (creator_id,))
+                        user_data = user_cursor.fetchone()
+                        if user_data:
+                            creator_username = user_data['username']
+                except Exception as e:
+                    print(f"Error fetching username: {e}")
+                    creator_username = str(creator_id)
+            
+            query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username) VALUES (%s, %s, %s)"
+            cursor.execute(query, (name, creator_id, creator_username))
             conn.commit()
             
             # Get the inserted ID
@@ -157,7 +163,8 @@ class Quiz:
                 id=quiz_id,
                 name=name,
                 creator_id=creator_id,
-                created_at=datetime.now()
+                created_at=datetime.now(),
+                creator_username=creator_username
             )
     
     def update(self, name):
