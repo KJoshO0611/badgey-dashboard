@@ -41,14 +41,65 @@ def index():
 @role_required(['analytics_viewer', 'admin'])
 def quizzes():
     """Show quiz analytics"""
-    return render_template('analytics/quizzes.html')
+    conn = get_db()
+    quiz_data = []
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT q.quiz_id, q.quiz_name, q.creator_id as creator, 
+                       COUNT(DISTINCT us.id) as attempts, AVG(us.score) as avg_score,
+                       COUNT(DISTINCT qu.question_id) as question_count
+                FROM quizzes q
+                LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
+                LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
+                GROUP BY q.quiz_id, q.quiz_name, q.creator_id
+                ORDER BY attempts DESC
+            """)
+            quiz_data = cursor.fetchall()
+            
+            # Format the data
+            for quiz in quiz_data:
+                if quiz['avg_score'] is not None:
+                    quiz['avg_score'] = round(quiz['avg_score'], 1)
+                else:
+                    quiz['avg_score'] = 0
+    except Exception as e:
+        logger.error(f"Error fetching quiz analytics: {e}")
+        
+    return render_template('analytics/quizzes.html', quizzes=quiz_data)
 
 @analytics_bp.route('/users')
 @login_required
 @role_required(['analytics_viewer', 'admin'])
 def users():
     """Show user analytics"""
-    return render_template('analytics/users.html')
+    conn = get_db()
+    user_data = []
+    
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT us.user_id as discord_id, us.user_id as username, 
+                       COUNT(us.id) as quizzes_taken,
+                       AVG(us.score) as avg_score,
+                       MAX(us.completion_date) as last_active
+                FROM user_scores us
+                GROUP BY us.user_id
+                ORDER BY quizzes_taken DESC
+            """)
+            user_data = cursor.fetchall()
+            
+            # Format the data
+            for user in user_data:
+                if user['avg_score'] is not None:
+                    user['avg_score'] = round(user['avg_score'], 1)
+                else:
+                    user['avg_score'] = 0
+    except Exception as e:
+        logger.error(f"Error fetching user analytics: {e}")
+        
+    return render_template('analytics/users.html', users=user_data)
 
 @analytics_bp.route('/trends')
 @login_required

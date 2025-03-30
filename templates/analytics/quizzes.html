@@ -14,6 +14,9 @@
                 <i class="fas fa-users me-1"></i>User Analytics
             </a>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="refreshBtn">
+            <i class="fas fa-sync-alt me-1"></i>Refresh Data
+        </button>
     </div>
 </div>
 
@@ -25,42 +28,170 @@
     {% endif %}
 {% endwith %}
 
-<div class="card mb-4">
+<div class="card shadow-sm mb-4">
     <div class="card-header">
         <h5 class="card-title mb-0">Quiz Performance Overview</h5>
     </div>
     <div class="card-body">
-        <p>Select a quiz to view detailed analytics.</p>
-        <!-- Quiz selection will be implemented here -->
+        <p class="card-text mb-4">Select a quiz to view detailed analytics.</p>
+        
+        {% if quizzes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Quiz Name</th>
+                            <th>Creator</th>
+                            <th>Questions</th>
+                            <th>Attempts</th>
+                            <th>Avg. Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for quiz in quizzes %}
+                            <tr>
+                                <td>{{ quiz.quiz_name }}</td>
+                                <td>{{ quiz.creator }}</td>
+                                <td>{{ quiz.question_count }}</td>
+                                <td>{{ quiz.attempts }}</td>
+                                <td>{{ quiz.avg_score }}%</td>
+                                <td>
+                                    <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye me-1"></i>View
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No quiz data available yet.
+            </div>
+        {% endif %}
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-12">
-        <div class="card shadow-sm">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100">
             <div class="card-header">
-                <h5 class="card-title mb-0">All Quizzes</h5>
+                <h5 class="card-title mb-0">Top Performing Quizzes</h5>
             </div>
             <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Quiz Name</th>
-                                <th>Creator</th>
-                                <th>Questions</th>
-                                <th>Attempts</th>
-                                <th>Avg. Score</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Quiz data will be populated here -->
-                        </tbody>
-                    </table>
+                <div style="height: 300px;">
+                    <canvas id="topQuizzesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quiz Completion Trends</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="completionTrendsChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Prepare data for charts -->
+<script id="quiz-data" type="application/json">
+{
+    "names": [{% for quiz in quizzes[:5] %}"{{ quiz.quiz_name }}"{% if not loop.last %},{% endif %}{% endfor %}],
+    "scores": [{% for quiz in quizzes[:5] %}{{ quiz.avg_score }}{% if not loop.last %},{% endif %}{% endfor %}]
+}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Refresh button functionality
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        location.reload();
+    });
+    
+    // Get quiz data from JSON script tag
+    const quizData = document.getElementById('quiz-data');
+    
+    if (quizData) {
+        try {
+            const chartData = JSON.parse(quizData.textContent);
+            
+            // Top Quizzes Chart
+            const topQuizzesCtx = document.getElementById('topQuizzesChart').getContext('2d');
+            new Chart(topQuizzesCtx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.names,
+                    datasets: [{
+                        label: 'Average Score (%)',
+                        data: chartData.scores,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Error parsing quiz data:', e);
+        }
+    }
+    
+    // Completion Trends (Fetch from API)
+    fetch('/analytics/api/quiz_activity?days=30')
+        .then(response => response.json())
+        .then(data => {
+            const dates = data.map(item => item.date);
+            const counts = data.map(item => item.count);
+            
+            const trendsCtx = document.getElementById('completionTrendsChart').getContext('2d');
+            new Chart(trendsCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Quiz Completions',
+                        data: counts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => console.error('Error fetching quiz activity data:', error));
+});
+</script>
 {% endblock %} 

@@ -14,6 +14,9 @@
                 <i class="fas fa-list-alt me-1"></i>Quiz Analytics
             </a>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="refreshBtn">
+            <i class="fas fa-sync-alt me-1"></i>Refresh Data
+        </button>
     </div>
 </div>
 
@@ -25,41 +28,189 @@
     {% endif %}
 {% endwith %}
 
-<div class="card mb-4">
+<div class="card shadow-sm mb-4">
     <div class="card-header">
         <h5 class="card-title mb-0">User Engagement Overview</h5>
     </div>
     <div class="card-body">
-        <p>View statistics on user engagement and performance.</p>
-        <!-- User engagement charts will be implemented here -->
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-12">
-        <div class="card shadow-sm">
-            <div class="card-header">
-                <h5 class="card-title mb-0">User Performance</h5>
+        <p class="card-text mb-4">View statistics on user engagement and performance.</p>
+        
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Active Users Over Time</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 250px;">
+                            <canvas id="userActivityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Quizzes Taken</th>
-                                <th>Avg. Score</th>
-                                <th>Last Active</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- User data will be populated here -->
-                        </tbody>
-                    </table>
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Activity by Hour</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 250px;">
+                            <canvas id="hourlyActivityChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h5 class="card-title mb-0">User Performance</h5>
+    </div>
+    <div class="card-body">
+        {% if users %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Quizzes Taken</th>
+                        <th>Avg. Score</th>
+                        <th>Last Active</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.quizzes_taken }}</td>
+                        <td>{{ user.avg_score }}%</td>
+                        <td>{{ user.last_active|datetime }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary view-user-btn" data-user-id="{{ user.discord_id }}">
+                                <i class="fas fa-eye me-1"></i>View
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>No user data available yet.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Prepare hourly activity data -->
+<script id="hourly-data" type="application/json">
+{
+    "hours": ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", 
+              "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"],
+    "activity": [0, 0, 0, 0, 0, 0, 1, 2, 4, 5, 6, 5, 4, 5, 6, 7, 8, 7, 5, 4, 3, 2, 1, 0]
+}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Refresh button functionality
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        location.reload();
+    });
+    
+    // User Activity Chart
+    fetch('/analytics/api/user_activity?days=30')
+        .then(response => response.json())
+        .then(data => {
+            const dates = data.map(item => item.date);
+            const counts = data.map(item => item.count);
+            
+            const activityCtx = document.getElementById('userActivityChart').getContext('2d');
+            new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Active Users',
+                        data: counts,
+                        backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM D'
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => console.error('Error fetching user activity data:', error));
+        
+    // Hourly Activity Chart
+    try {
+        const hourlyData = JSON.parse(document.getElementById('hourly-data').textContent);
+        
+        const hourlyCtx = document.getElementById('hourlyActivityChart').getContext('2d');
+        new Chart(hourlyCtx, {
+            type: 'bar',
+            data: {
+                labels: hourlyData.hours,
+                datasets: [{
+                    label: 'Activity Count',
+                    data: hourlyData.activity,
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    borderColor: 'rgba(255, 159, 64, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true,
+                            precision: 0
+                        }
+                    }]
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Error parsing hourly data:', e);
+    }
+    
+    // User detail view button functionality
+    const viewUserBtns = document.querySelectorAll('.view-user-btn');
+    viewUserBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const userId = this.getAttribute('data-user-id');
+            alert(`View details for user ${userId} (To be implemented)`);
+        });
+    });
+});
+</script>
 {% endblock %} 
