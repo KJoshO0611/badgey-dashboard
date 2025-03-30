@@ -1,0 +1,41 @@
+{% extends 'layout.html' %}
+
+{% block title %}Create Quiz - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Create Quiz</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('quizzes.list') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Quizzes
+            </a>
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('quizzes.create') }}">
+            <div class="mb-3">
+                <label for="quiz_name" class="form-label">Quiz Name</label>
+                <input type="text" class="form-control" id="quiz_name" name="quiz_name" required>
+                <div class="form-text">Give your quiz a descriptive name.</div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{{ url_for('quizzes.list') }}" class="btn btn-outline-secondary me-md-2">Cancel</a>
+                <button type="submit" class="btn btn-primary">Create Quiz</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

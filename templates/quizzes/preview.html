@@ -1,0 +1,360 @@
+{% extends 'layout.html' %}
+
+{% block title %}Preview: {{ quiz.quiz_name }} - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Preview: {{ quiz.quiz_name }}</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Quiz
+            </a>
+            {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
+                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-edit me-1"></i>Edit Quiz
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Preview Mode</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">This is a preview of how your quiz will appear to users. Your answers and progress won't be saved.</p>
+    </div>
+</div>
+
+{% if questions %}
+    <div id="quizContainer">
+        <div class="card mb-4" id="quizIntro">
+            <div class="card-body text-center py-5">
+                <h3>{{ quiz.quiz_name }}</h3>
+                <p class="lead mb-4">This quiz contains {{ questions|length }} questions.</p>
+                <button id="startQuizBtn" class="btn btn-lg btn-primary">Start Quiz</button>
+            </div>
+        </div>
+        
+        <div id="quizContent" style="display: none;">
+            <!-- Progress bar -->
+            <div class="progress mb-4">
+                <div id="quizProgress" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            
+            <!-- Questions will be inserted here -->
+            {% for question in questions %}
+                <div class="question-slide" id="question{{ loop.index }}" style="display: none;">
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between">
+                            <span>Question {{ loop.index }} of {{ questions|length }}</span>
+                            <span>{{ question.score }} points</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title mb-4">{{ question.question }}</h5>
+                            
+                            <div class="options-container">
+                                {% for option in question.options %}
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="radio" name="question{{ loop.parent.loop.index }}" id="q{{ loop.parent.loop.index }}option{{ loop.index }}" value="{{ loop.index0 }}" data-correct="{{ loop.index0 == question.correct_answer|int }}">
+                                        <label class="form-check-label" for="q{{ loop.parent.loop.index }}option{{ loop.index }}">
+                                            {{ option }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="feedback-container mt-4" style="display: none;">
+                                <div class="alert alert-success correct-feedback" style="display: none;">
+                                    <i class="fas fa-check-circle me-2"></i> Correct!
+                                </div>
+                                <div class="alert alert-danger incorrect-feedback" style="display: none;">
+                                    <i class="fas fa-times-circle me-2"></i> Incorrect. The correct answer is: 
+                                    <span class="correct-answer-text"></span>
+                                </div>
+                                {% if question.explanation %}
+                                    <div class="card mt-3 explanation-box" style="display: none;">
+                                        <div class="card-body">
+                                            <h6>Explanation:</h6>
+                                            <p>{{ question.explanation }}</p>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex justify-content-between">
+                            <button class="btn btn-outline-secondary prev-btn" {% if loop.first %}disabled{% endif %}>Previous</button>
+                            <button class="btn btn-primary check-answer-btn">Check Answer</button>
+                            <button class="btn btn-success next-btn" style="display: none;">Next</button>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+            
+            <!-- Results slide -->
+            <div class="question-slide" id="resultsSlide" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Quiz Results</h5>
+                    </div>
+                    <div class="card-body text-center py-5">
+                        <h3>You've completed the quiz!</h3>
+                        <div class="display-1 my-4">
+                            <span id="scorePercent">0</span>%
+                        </div>
+                        <p class="lead">You got <span id="correctAnswers">0</span> out of {{ questions|length }} questions correct.</p>
+                        <p>Total score: <span id="totalScore">0</span> points</p>
+                        
+                        <div class="mt-4">
+                            <button id="restartQuizBtn" class="btn btn-primary me-2">Restart Quiz</button>
+                            <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-secondary">Back to Quiz</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-exclamation-circle fa-4x mb-3 text-warning"></i>
+            <h3>No Questions Available</h3>
+            <p class="lead">This quiz doesn't have any questions yet.</p>
+            {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
+                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}#add-question" class="btn btn-primary mt-3">
+                    <i class="fas fa-plus me-1"></i>Add Questions
+                </a>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if questions %}
+<script>
+// Receive data from server-side rendered templates
+const quizData = {
+    totalQuestions: {{ questions|length }},
+    scores: [
+        {% for question in questions %}
+            {{ question.score }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize UI elements
+    const quizIntro = document.getElementById('quizIntro');
+    const quizContent = document.getElementById('quizContent');
+    const startQuizBtn = document.getElementById('startQuizBtn');
+    const restartQuizBtn = document.getElementById('restartQuizBtn');
+    const progressBar = document.getElementById('quizProgress');
+    const questionSlides = document.querySelectorAll('.question-slide');
+    const resultsSlide = document.getElementById('resultsSlide');
+    
+    // Initialize quiz state
+    let currentQuestion = 0;
+    let totalQuestions = quizData.totalQuestions;
+    let correctCount = 0;
+    let totalScore = 0;
+    let maxPossibleScore = 0;
+    let questionScores = quizData.scores;
+    let answeredQuestions = {};
+    
+    // Calculate max possible score
+    questionScores.forEach(score => {
+        maxPossibleScore += parseInt(score);
+    });
+    
+    // Start quiz
+    startQuizBtn.addEventListener('click', function() {
+        quizIntro.style.display = 'none';
+        quizContent.style.display = 'block';
+        showQuestion(0);
+    });
+    
+    // Restart quiz
+    restartQuizBtn.addEventListener('click', function() {
+        // Reset variables
+        currentQuestion = 0;
+        correctCount = 0;
+        totalScore = 0;
+        answeredQuestions = {};
+        
+        // Reset UI
+        questionSlides.forEach(question => {
+            question.style.display = 'none';
+            
+            // Clear selected options
+            const options = question.querySelectorAll('input[type="radio"]');
+            options.forEach(option => {
+                option.checked = false;
+            });
+            
+            // Hide feedback
+            const feedback = question.querySelector('.feedback-container');
+            if (feedback) {
+                feedback.style.display = 'none';
+            }
+            
+            // Show check answer button, hide next button
+            const checkBtn = question.querySelector('.check-answer-btn');
+            const nextBtn = question.querySelector('.next-btn');
+            if (checkBtn && nextBtn) {
+                checkBtn.style.display = 'block';
+                nextBtn.style.display = 'none';
+            }
+        });
+        
+        // Reset progress bar
+        updateProgress(0);
+        
+        // Show first question
+        resultsSlide.style.display = 'none';
+        showQuestion(0);
+    });
+    
+    // Handle check answer buttons
+    document.querySelectorAll('.check-answer-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const questionSlide = this.closest('.question-slide');
+            const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
+            
+            // Check if an option is selected
+            const selectedOption = questionSlide.querySelector('input[type="radio"]:checked');
+            if (!selectedOption) {
+                alert('Please select an answer');
+                return;
+            }
+            
+            // Show feedback
+            const feedbackContainer = questionSlide.querySelector('.feedback-container');
+            const correctFeedback = questionSlide.querySelector('.correct-feedback');
+            const incorrectFeedback = questionSlide.querySelector('.incorrect-feedback');
+            const explanationBox = questionSlide.querySelector('.explanation-box');
+            
+            feedbackContainer.style.display = 'block';
+            
+            const isCorrect = selectedOption.dataset.correct === 'true';
+            
+            // Show correct/incorrect feedback
+            if (isCorrect) {
+                correctFeedback.style.display = 'block';
+                incorrectFeedback.style.display = 'none';
+                
+                // Only count score the first time a question is answered correctly
+                if (!answeredQuestions[questionIndex]) {
+                    correctCount++;
+                    totalScore += parseInt(questionScores[questionIndex]);
+                }
+            } else {
+                correctFeedback.style.display = 'none';
+                incorrectFeedback.style.display = 'block';
+                
+                // Show which answer was correct
+                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
+                const correctAnswerText = correctOption.nextElementSibling.textContent.trim();
+                questionSlide.querySelector('.correct-answer-text').textContent = correctAnswerText;
+            }
+            
+            // Show explanation if available
+            if (explanationBox) {
+                explanationBox.style.display = 'block';
+            }
+            
+            // Mark question as answered
+            answeredQuestions[questionIndex] = true;
+            
+            // Show next button, hide check answer button
+            this.style.display = 'none';
+            questionSlide.querySelector('.next-btn').style.display = 'block';
+        });
+    });
+    
+    // Handle next buttons
+    document.querySelectorAll('.next-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const questionSlide = this.closest('.question-slide');
+            const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
+            
+            // Show next question or results if last question
+            if (questionIndex < totalQuestions - 1) {
+                showQuestion(questionIndex + 1);
+            } else {
+                showResults();
+            }
+        });
+    });
+    
+    // Handle previous buttons
+    document.querySelectorAll('.prev-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const questionSlide = this.closest('.question-slide');
+            const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
+            
+            if (questionIndex > 0) {
+                showQuestion(questionIndex - 1);
+            }
+        });
+    });
+    
+    // Function to show a specific question
+    function showQuestion(index) {
+        currentQuestion = index;
+        
+        // Hide all questions
+        questionSlides.forEach(question => {
+            question.style.display = 'none';
+        });
+        
+        // Show current question
+        questionSlides[index].style.display = 'block';
+        
+        // Update progress bar
+        updateProgress(index);
+    }
+    
+    // Function to update progress bar
+    function updateProgress(index) {
+        const progress = Math.floor((index / totalQuestions) * 100);
+        progressBar.style.width = `${progress}%`;
+        progressBar.setAttribute('aria-valuenow', progress);
+        progressBar.textContent = `${progress}%`;
+    }
+    
+    // Function to show results
+    function showResults() {
+        // Hide all questions
+        questionSlides.forEach(question => {
+            question.style.display = 'none';
+        });
+        
+        // Update result values
+        const scorePercent = Math.round((correctCount / totalQuestions) * 100);
+        document.getElementById('scorePercent').textContent = scorePercent;
+        document.getElementById('correctAnswers').textContent = correctCount;
+        document.getElementById('totalScore').textContent = totalScore;
+        
+        // Show results slide
+        resultsSlide.style.display = 'block';
+        
+        // Update progress to 100%
+        progressBar.style.width = '100%';
+        progressBar.setAttribute('aria-valuenow', 100);
+        progressBar.textContent = '100%';
+    }
+});
+</script>
+{% endif %}
+{% endblock %} 

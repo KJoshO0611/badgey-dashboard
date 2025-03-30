@@ -1,0 +1,130 @@
+{% extends 'layout.html' %}
+
+{% block title %}My Quizzes - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">My Quizzes</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+                <a href="{{ url_for('quizzes.create') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-plus me-1"></i>Create Quiz
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card">
+    <div class="card-body">
+        {% if quizzes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Quiz Name</th>
+                            <th>Creator</th>
+                            <th>Questions</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for quiz in quizzes %}
+                            <tr>
+                                <td>{{ quiz.quiz_name }}</td>
+                                <td>{{ quiz.creator_name }}</td>
+                                <td>{{ quiz.question_count }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
+                                            <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-secondary">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteQuizModal" 
+                                                    data-quiz-id="{{ quiz.quiz_id }}" 
+                                                    data-quiz-name="{{ quiz.quiz_name }}">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </button>
+                                        {% endif %}
+                                        <a href="{{ url_for('quizzes.preview', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-info">
+                                            <i class="fas fa-play"></i> Preview
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-folder-open fa-4x mb-3 text-muted"></i>
+                <h5>No quizzes found</h5>
+                <p class="text-muted">You haven't created any quizzes yet.</p>
+                {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+                    <a href="{{ url_for('quizzes.create') }}" class="btn btn-primary mt-3">
+                        <i class="fas fa-plus me-1"></i>Create Your First Quiz
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Quiz Modal -->
+<div class="modal fade" id="deleteQuizModal" tabindex="-1" aria-labelledby="deleteQuizModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteQuizModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the quiz <span id="quizNameSpan"></span>? This action cannot be undone.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteQuizForm" method="POST" action="">
+                    <button type="submit" class="btn btn-danger">Delete Quiz</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up delete modal
+    const deleteModal = document.getElementById('deleteQuizModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const quizId = button.getAttribute('data-quiz-id');
+            const quizName = button.getAttribute('data-quiz-name');
+            
+            const deleteForm = document.getElementById('deleteQuizForm');
+            deleteForm.action = '/quizzes/' + quizId + '/delete';
+            
+            const quizNameSpan = document.getElementById('quizNameSpan');
+            quizNameSpan.textContent = '"' + quizName + '"';
+        });
+    }
+});
+</script>
+{% endblock %} 
