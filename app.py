@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import click
 from datetime import datetime, timedelta
 from flask_session import Session
+import urllib.parse
 
 # Load environment variables
 load_dotenv()
@@ -43,7 +44,15 @@ app.config['DATABASE'] = {
 
 # Session configuration
 app.config['SESSION_TYPE'] = 'sqlalchemy'
-app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{app.config['DATABASE']['user']}:{app.config['DATABASE']['password']}@{app.config['DATABASE']['host']}:{app.config['DATABASE']['port']}/{app.config['DATABASE']['database']}"
+
+# URL encode username and password to handle special characters
+username = urllib.parse.quote_plus(app.config['DATABASE']['user'])
+password = urllib.parse.quote_plus(app.config['DATABASE']['password'])
+host = app.config['DATABASE']['host']
+port = app.config['DATABASE']['port']
+database = app.config['DATABASE']['database']
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
 app.config['SESSION_SQLALCHEMY_TABLE'] = 'dashboard_sessions'
 app.config['SESSION_PERMANENT'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
