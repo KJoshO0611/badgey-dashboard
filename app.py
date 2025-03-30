@@ -5,7 +5,8 @@ from flask_login import LoginManager, current_user, login_required, login_user, 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import click
-from datetime import datetime
+from datetime import datetime, timedelta
+from flask_sessionstore import SqlAlchemyStore
 
 # Load environment variables
 load_dotenv()
@@ -39,6 +40,18 @@ app.config['DATABASE'] = {
     'password': os.getenv('DBPASSWORD', ''),
     'database': os.getenv('DBNAME', 'badgey')
 }
+
+# Session configuration
+app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{app.config['DATABASE']['user']}:{app.config['DATABASE']['password']}@{app.config['DATABASE']['host']}:{app.config['DATABASE']['port']}/{app.config['DATABASE']['database']}"
+app.config['SESSION_SQLALCHEMY_TABLE'] = 'dashboard_sessions'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+
+# Initialize Flask-Sessionstore
+from flask_sessionstore import Session
+session_store = Session(app)
+
 app.config['DISCORD_CLIENT_ID'] = os.getenv('DISCORD_CLIENT_ID')
 app.config['DISCORD_CLIENT_SECRET'] = os.getenv('DISCORD_CLIENT_SECRET')
 app.config['DISCORD_REDIRECT_URI'] = os.getenv('DISCORD_REDIRECT_URI')

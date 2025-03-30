@@ -182,6 +182,27 @@ def auth_callback():
         login_user(db_user)
         logger.info(f"User logged in: {username} ({discord_id})")
         
+        # Log this login to dashboard_logs
+        try:
+            from models.db import get_db
+            conn = get_db()
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO dashboard_logs (user_id, action, details, ip_address)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (
+                        db_user.id,
+                        "login",
+                        f"User logged in via Discord OAuth",
+                        request.remote_addr
+                    )
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error logging user login: {str(e)}")
+        
         next_url = session.pop('next', None)
         if next_url:
             return redirect(next_url)
@@ -196,9 +217,30 @@ def auth_callback():
 @login_required
 def logout():
     """Log out the user."""
+    # Log this logout to dashboard_logs
+    try:
+        from models.db import get_db
+        conn = get_db()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO dashboard_logs (user_id, action, details, ip_address)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    current_user.id,
+                    "logout",
+                    f"User logged out",
+                    request.remote_addr
+                )
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error logging user logout: {str(e)}")
+    
     logout_user()
     flash("You have been logged out successfully.", 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('auth.login'))
 
 @auth_bp.route('/profile')
 @login_required
