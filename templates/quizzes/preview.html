@@ -143,18 +143,20 @@
 
 {% block extra_js %}
 {% if questions %}
-<script>
-// Receive data from server-side rendered templates
-const quizData = {
-    totalQuestions: {{ questions|length }},
-    scores: [
-        {% for question in questions %}
-            {{ question.score }}{% if not loop.last %},{% endif %}
-        {% endfor %}
-    ]
-};
+<!-- Store data in a JSON script tag to avoid linter errors -->
+<script type="text/json" id="quiz-data">
+{
+    "totalQuestions": {{ questions|length }},
+    "scores": [{% for question in questions %}{{ question.score }}{% if not loop.last %},{% endif %}{% endfor %}]
+}
+</script>
 
+<script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Parse the JSON data from the script tag
+    const quizDataElement = document.getElementById('quiz-data');
+    const quizData = JSON.parse(quizDataElement.textContent);
+    
     // Initialize UI elements
     const quizIntro = document.getElementById('quizIntro');
     const quizContent = document.getElementById('quizContent');

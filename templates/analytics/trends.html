@@ -1,0 +1,246 @@
+{% extends 'layout.html' %}
+
+{% block title %}Trends Analytics - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Trends Analytics</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analytics.index') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-chart-bar me-1"></i>Dashboard
+            </a>
+            <a href="{{ url_for('analytics.quizzes') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-list-alt me-1"></i>Quiz Analytics
+            </a>
+            <a href="{{ url_for('analytics.users') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-users me-1"></i>User Analytics
+            </a>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-calendar me-1"></i>Time Range
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" data-range="7">Last 7 Days</a></li>
+                <li><a class="dropdown-item" href="#" data-range="30">Last 30 Days</a></li>
+                <li><a class="dropdown-item" href="#" data-range="90">Last 90 Days</a></li>
+                <li><a class="dropdown-item" href="#" data-range="365">Last Year</a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Quiz Completions</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="quizCompletionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Active Users</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="activeUsersChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-12 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Score Distribution</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="scoreDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentRange = 30; // Default to 30 days
+    
+    // Initialize charts
+    const initCharts = () => {
+        fetchQuizCompletions(currentRange);
+        fetchActiveUsers(currentRange);
+        fetchScoreDistribution();
+    };
+    
+    // Fetch quiz completions data
+    const fetchQuizCompletions = async (days) => {
+        try {
+            const response = await fetch(`/analytics/api/quiz-completions?days=${days}`);
+            const data = await response.json();
+            
+            const ctx = document.getElementById('quizCompletionsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching quiz completions data:', error);
+        }
+    };
+    
+    // Fetch active users data
+    const fetchActiveUsers = async (days) => {
+        try {
+            const response = await fetch(`/analytics/api/user_activity?days=${days}`);
+            const data = await response.json();
+            
+            const dates = data.map(item => item.date);
+            const counts = data.map(item => item.count);
+            
+            const ctx = document.getElementById('activeUsersChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Active Users',
+                        data: counts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching active users data:', error);
+        }
+    };
+    
+    // Fetch score distribution data
+    const fetchScoreDistribution = async () => {
+        try {
+            // This endpoint would need to be implemented
+            // For now, we'll use placeholder data
+            const data = {
+                labels: ['0-20%', '21-40%', '41-60%', '61-80%', '81-100%'],
+                datasets: [{
+                    label: 'Score Distribution',
+                    data: [5, 10, 15, 30, 40],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.5)',
+                        'rgba(255, 159, 64, 0.5)',
+                        'rgba(255, 205, 86, 0.5)',
+                        'rgba(75, 192, 192, 0.5)',
+                        'rgba(54, 162, 235, 0.5)'
+                    ],
+                    borderColor: [
+                        'rgb(255, 99, 132)',
+                        'rgb(255, 159, 64)',
+                        'rgb(255, 205, 86)',
+                        'rgb(75, 192, 192)',
+                        'rgb(54, 162, 235)'
+                    ],
+                    borderWidth: 1
+                }]
+            };
+            
+            const ctx = document.getElementById('scoreDistributionChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching score distribution data:', error);
+        }
+    };
+    
+    // Handle time range selection
+    document.querySelectorAll('[data-range]').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentRange = parseInt(this.getAttribute('data-range'));
+            
+            // Clear existing charts and reinitialize
+            document.getElementById('quizCompletionsChart').remove();
+            document.getElementById('activeUsersChart').remove();
+            document.getElementById('scoreDistributionChart').remove();
+            
+            // Create new canvas elements
+            const quizCompletionsContainer = document.querySelector('#quizCompletionsChart').parentNode;
+            const activeUsersContainer = document.querySelector('#activeUsersChart').parentNode;
+            const scoreDistributionContainer = document.querySelector('#scoreDistributionChart').parentNode;
+            
+            quizCompletionsContainer.innerHTML = '<canvas id="quizCompletionsChart"></canvas>';
+            activeUsersContainer.innerHTML = '<canvas id="activeUsersChart"></canvas>';
+            scoreDistributionContainer.innerHTML = '<canvas id="scoreDistributionChart"></canvas>';
+            
+            // Reinitialize charts with new range
+            initCharts();
+        });
+    });
+    
+    // Initialize on page load
+    initCharts();
+});
+</script>
+{% endblock %} 

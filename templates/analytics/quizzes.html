@@ -1,0 +1,66 @@
+{% extends 'layout.html' %}
+
+{% block title %}Quiz Analytics - Badgey Quiz Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Quiz Analytics</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analytics.index') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-chart-bar me-1"></i>Dashboard
+            </a>
+            <a href="{{ url_for('analytics.users') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-users me-1"></i>User Analytics
+            </a>
+        </div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Quiz Performance Overview</h5>
+    </div>
+    <div class="card-body">
+        <p>Select a quiz to view detailed analytics.</p>
+        <!-- Quiz selection will be implemented here -->
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">All Quizzes</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Quiz Name</th>
+                                <th>Creator</th>
+                                <th>Questions</th>
+                                <th>Attempts</th>
+                                <th>Avg. Score</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Quiz data will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,260 @@
+{% extends 'layout.html' %}
+
+{% block title %}Analytics - Badgey Quiz Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-5px);
+    }
+    .trend-up {
+        color: #28a745;
+    }
+    .trend-down {
+        color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Analytics Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('analytics.quizzes') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-list-alt me-1"></i>Quiz Analytics
+            </a>
+            <a href="{{ url_for('analytics.users') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-users me-1"></i>User Analytics
+            </a>
+            <a href="{{ url_for('analytics.trends') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-chart-line me-1"></i>Trends
+            </a>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="refreshBtn">
+            <i class="fas fa-sync-alt me-1"></i>Refresh Data
+        </button>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<!-- Summary Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Total Quizzes</h5>
+                <h2 class="display-4">{{ metrics.total_quizzes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Total Questions</h5>
+                <h2 class="display-4">{{ metrics.total_questions }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Quiz Attempts</h5>
+                <h2 class="display-4">{{ metrics.total_attempts }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Unique Users</h5>
+                <h2 class="display-4">{{ metrics.total_users }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Average Score</h5>
+                <h2 class="display-4">{{ metrics.avg_score }}%</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card h-100 shadow-sm metric-card">
+            <div class="card-body">
+                <h5 class="card-title text-muted">Attempts Today</h5>
+                <h2 class="display-4">{{ metrics.attempts_today }}</h2>
+                <p class="mt-2 mb-0">
+                    {% if metrics.daily_trend > 0 %}
+                        <span class="trend-up"><i class="fas fa-arrow-up me-1"></i>{{ metrics.daily_trend }}%</span>
+                    {% elif metrics.daily_trend < 0 %}
+                        <span class="trend-down"><i class="fas fa-arrow-down me-1"></i>{{ metrics.daily_trend|abs }}%</span>
+                    {% else %}
+                        <span class="text-muted">No change</span>
+                    {% endif %}
+                    <span class="text-muted ms-1">vs yesterday</span>
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">Quiz Activity (30 days)</h5>
+                <div style="height: 200px;">
+                    <canvas id="quizActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Top Quizzes -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Top Quizzes</h5>
+                <a href="{{ url_for('analytics.quizzes') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if top_quizzes %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Quiz</th>
+                                    <th>Attempts</th>
+                                    <th>Avg. Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for quiz in top_quizzes %}
+                                    <tr>
+                                        <td>{{ quiz.name }}</td>
+                                        <td>{{ quiz.attempts }}</td>
+                                        <td>{{ quiz.avg_score|round(1) }}%</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-4">No quiz data available yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activity -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_activity %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Quiz</th>
+                                    <th>Score</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activity %}
+                                    <tr>
+                                        <td>{{ activity.username }}</td>
+                                        <td>{{ activity.quiz_name }}</td>
+                                        <td>{{ activity.score }}%</td>
+                                        <td>{{ activity.created_at|datetime }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-4">No recent activity found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quiz Activity Chart
+    const fetchQuizActivity = async () => {
+        try {
+            const response = await fetch('/analytics/api/quiz_activity?days=30');
+            const data = await response.json();
+            
+            const dates = data.map(item => item.date);
+            const counts = data.map(item => item.count);
+            
+            const ctx = document.getElementById('quizActivityChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Quiz Attempts',
+                        data: counts,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching quiz activity data:', error);
+        }
+    };
+    
+    // Fetch data on page load
+    fetchQuizActivity();
+    
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        window.location.reload();
+    });
+});
+</script>
+{% endblock %} 
