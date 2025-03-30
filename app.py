@@ -60,6 +60,13 @@ port = app.config['DATABASE']['port']
 database = app.config['DATABASE']['database']
 engine_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
 
+# Configure session settings
+app.config['SESSION_COOKIE_NAME'] = 'session'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Create the database engine (without models, just for raw SQL)
 db = sa.create_engine(engine_url)
 

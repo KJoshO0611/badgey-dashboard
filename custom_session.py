@@ -81,7 +81,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         
     def open_session(self, app, request):
         """Open a session from the request."""
-        sid = request.cookies.get(app.session_cookie_name)
+        sid = request.cookies.get(app.config.get('SESSION_COOKIE_NAME', 'session'))
         if not sid:
             # No session ID, create a new session
             return self.session_class(sid=self._generate_sid(), permanent=True)
@@ -143,7 +143,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         if not session:
             if session.modified:
                 self._delete_session(session.sid)
-                response.delete_cookie(app.session_cookie_name, domain=domain, path=path)
+                response.delete_cookie(app.config.get('SESSION_COOKIE_NAME', 'session'), domain=domain, path=path)
             return
         
         # Determine when the session should expire
@@ -213,7 +213,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             cookie_sid = signer.dumps(cookie_sid)
             
         response.set_cookie(
-            app.session_cookie_name,
+            app.config.get('SESSION_COOKIE_NAME', 'session'),
             cookie_sid,
             expires=expires,
             httponly=httponly,
