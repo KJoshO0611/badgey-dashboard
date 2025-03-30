@@ -137,38 +137,38 @@ def api_quiz_completions():
 def get_summary_metrics():
     """Get summary metrics for the dashboard"""
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     
     try:
         # Total quizzes
-        cursor.execute("SELECT COUNT(*) FROM quizzes")
-        total_quizzes = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as count FROM quizzes")
+        total_quizzes = cursor.fetchone()['count']
         
         # Total questions
-        cursor.execute("SELECT COUNT(*) FROM questions")
-        total_questions = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as count FROM questions")
+        total_questions = cursor.fetchone()['count']
         
         # Total quiz attempts
-        cursor.execute("SELECT COUNT(*) FROM user_scores")
-        total_attempts = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as count FROM user_scores")
+        total_attempts = cursor.fetchone()['count']
         
         # Total users
-        cursor.execute("SELECT COUNT(DISTINCT user_id) FROM user_scores")
-        total_users = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(DISTINCT user_id) as count FROM user_scores")
+        total_users = cursor.fetchone()['count']
         
         # Average score
-        cursor.execute("SELECT AVG(score) FROM user_scores")
-        avg_score = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT AVG(score) as avg_score FROM user_scores")
+        avg_score = cursor.fetchone()['avg_score'] or 0
         
         # Quiz attempts today
         today = datetime.now().date()
-        cursor.execute("SELECT COUNT(*) FROM user_scores WHERE DATE(timestamp) = %s", (today,))
-        attempts_today = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(timestamp) = %s", (today,))
+        attempts_today = cursor.fetchone()['count']
         
         # Calculate daily trend (% increase/decrease from yesterday)
         yesterday = today - timedelta(days=1)
-        cursor.execute("SELECT COUNT(*) FROM user_scores WHERE DATE(timestamp) = %s", (yesterday,))
-        attempts_yesterday = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE DATE(timestamp) = %s", (yesterday,))
+        attempts_yesterday = cursor.fetchone()['count']
         
         if attempts_yesterday > 0:
             daily_trend = ((attempts_today - attempts_yesterday) / attempts_yesterday) * 100

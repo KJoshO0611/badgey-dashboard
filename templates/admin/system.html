@@ -1,0 +1,131 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin - System Settings{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>System Settings</h1>
+        <p class="text-muted">Manage system configuration</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('admin.system_info') }}" class="btn btn-outline-primary">
+            <i class="fas fa-server me-2"></i>System Info
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Application Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.update_settings') }}">
+                    <div class="mb-3">
+                        <label for="siteTitle" class="form-label">Site Title</label>
+                        <input type="text" class="form-control" id="siteTitle" name="site_title" value="{{ settings.site_title if settings else 'Badgey Quiz Dashboard' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="maintenanceMode" class="form-check-label">Maintenance Mode</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="maintenanceMode" name="maintenance_mode" {% if settings and settings.maintenance_mode %}checked{% endif %}>
+                            <label class="form-check-label" for="maintenanceMode">Enable maintenance mode</label>
+                        </div>
+                        <small class="text-muted">When enabled, only admins can access the site.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="allowRegistration" class="form-check-label">User Registration</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="allowRegistration" name="allow_registration" {% if settings and settings.allow_registration %}checked{% endif %}>
+                            <label class="form-check-label" for="allowRegistration">Allow new user registration</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Cache Management</h5>
+            </div>
+            <div class="card-body">
+                <p>Clear application caches to refresh data and fix issues.</p>
+                
+                <form method="POST" action="{{ url_for('admin.clear_cache') }}">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="cacheData" name="cache_data" checked>
+                        <label class="form-check-label" for="cacheData">
+                            Data Cache
+                        </label>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="cacheSession" name="cache_session">
+                        <label class="form-check-label" for="cacheSession">
+                            Session Cache
+                        </label>
+                        <small class="d-block text-danger">Warning: This will log out all users!</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning">Clear Selected Caches</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Backup & Restore</h5>
+            </div>
+            <div class="card-body">
+                <p>Create and manage database backups.</p>
+                
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin.create_backup') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-download me-2"></i>Create Backup
+                    </a>
+                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#restoreBackupModal">
+                        <i class="fas fa-upload me-2"></i>Restore Backup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Backup Modal -->
+<div class="modal fade" id="restoreBackupModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Restore Backup</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.restore_backup') }}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Warning: Restoring a backup will overwrite the current database. This action cannot be undone.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="backupFile" class="form-label">Backup File</label>
+                        <input class="form-control" type="file" id="backupFile" name="backup_file" accept=".sql">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Restore Backup</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

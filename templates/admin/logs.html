@@ -1,0 +1,214 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin - System Logs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .log-entry {
+        font-family: 'Courier New', monospace;
+        font-size: 0.9rem;
+    }
+    
+    .log-level {
+        display: inline-block;
+        width: 70px;
+        text-align: center;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    
+    .log-level-info {
+        background-color: var(--info-color);
+        color: white;
+    }
+    
+    .log-level-warning {
+        background-color: var(--warning-color);
+        color: var(--dark-color);
+    }
+    
+    .log-level-error {
+        background-color: var(--danger-color);
+        color: white;
+    }
+    
+    .log-timestamp {
+        color: var(--gray-color);
+    }
+    
+    .log-source {
+        color: var(--primary-color);
+        font-weight: bold;
+    }
+    
+    .log-message {
+        white-space: pre-wrap;
+    }
+    
+    .log-filter-btn.active {
+        filter: brightness(85%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1>System Logs</h1>
+        <p class="text-muted">View and manage application logs</p>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group">
+            <button class="btn btn-outline-primary log-filter-btn active" data-filter="all">
+                All Logs
+            </button>
+            <button class="btn btn-outline-info log-filter-btn" data-filter="info">
+                Info
+            </button>
+            <button class="btn btn-outline-warning log-filter-btn" data-filter="warning">
+                Warnings
+            </button>
+            <button class="btn btn-outline-danger log-filter-btn" data-filter="error">
+                Errors
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" id="logSearch" placeholder="Search logs...">
+            <button class="btn btn-outline-secondary" type="button" id="clearSearchBtn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-striped" id="logsTable">
+                <thead>
+                    <tr>
+                        <th>Level</th>
+                        <th>Timestamp</th>
+                        <th>Source</th>
+                        <th>User</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                        <tr class="log-entry log-level-{{ log.level|lower }}">
+                            <td>
+                                <span class="log-level log-level-{{ log.level|lower }}">
+                                    {{ log.level }}
+                                </span>
+                            </td>
+                            <td class="log-timestamp">
+                                {{ log.timestamp|datetime }}
+                            </td>
+                            <td class="log-source">
+                                {{ log.source }}
+                            </td>
+                            <td>
+                                {% if log.user_id %}
+                                    {{ log.username or log.user_id }}
+                                {% else %}
+                                    System
+                                {% endif %}
+                            </td>
+                            <td class="log-message">{{ log.message }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if not logs %}
+            <div class="text-center py-5">
+                <p class="text-muted">No logs found.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Log filtering
+    const filterBtns = document.querySelectorAll('.log-filter-btn');
+    const logEntries = document.querySelectorAll('.log-entry');
+    const searchInput = document.getElementById('logSearch');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    
+    // Handle filter buttons
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Remove active class from all buttons
+            filterBtns.forEach(b => b.classList.remove('active'));
+            
+            // Add active class to clicked button
+            this.classList.add('active');
+            
+            const filter = this.getAttribute('data-filter');
+            
+            // Show/hide log entries based on filter
+            logEntries.forEach(entry => {
+                if (filter === 'all' || entry.classList.contains(`log-level-${filter}`)) {
+                    entry.style.display = '';
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+            
+            // Apply search filter again if there's a search term
+            if (searchInput.value.trim() !== '') {
+                applySearchFilter();
+            }
+        });
+    });
+    
+    // Handle search
+    function applySearchFilter() {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        
+        if (searchTerm === '') {
+            // If search is empty, apply only the current level filter
+            const activeFilter = document.querySelector('.log-filter-btn.active').getAttribute('data-filter');
+            
+            logEntries.forEach(entry => {
+                if (activeFilter === 'all' || entry.classList.contains(`log-level-${activeFilter}`)) {
+                    entry.style.display = '';
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+            
+            return;
+        }
+        
+        // Apply both search and level filter
+        const activeFilter = document.querySelector('.log-filter-btn.active').getAttribute('data-filter');
+        
+        logEntries.forEach(entry => {
+            const visible = (activeFilter === 'all' || entry.classList.contains(`log-level-${activeFilter}`));
+            const textContent = entry.textContent.toLowerCase();
+            
+            if (visible && textContent.includes(searchTerm)) {
+                entry.style.display = '';
+            } else {
+                entry.style.display = 'none';
+            }
+        });
+    }
+    
+    searchInput.addEventListener('input', applySearchFilter);
+    
+    // Clear search
+    clearSearchBtn.addEventListener('click', function() {
+        searchInput.value = '';
+        applySearchFilter();
+    });
+});
+</script>
+{% endblock %} 
