@@ -539,7 +539,7 @@ def update_user_roles():
 @admin_bp.route('/update_user_roles', methods=['POST'])
 @login_required
 @admin_required
-def update_user_roles():
+def update_user_roles_form():
     """Update user roles via web form"""
     user_id = request.form.get('user_id')
     roles = request.form.getlist('roles')
