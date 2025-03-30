@@ -11,18 +11,21 @@ import sqlalchemy as sa
 import gzip
 from io import BytesIO
 import functools
-
-# Load environment variables
-load_dotenv()
-
-# Import blueprints and models (to be created in separate files)
+from flask_session import Session
+from flask_caching import Cache
+from flask_compress import Compress
+from flask_wtf.csrf import CSRFProtect
+from db_utils import init_db, init_user_table
+from models.user import User, init_user_table
+from models.db import get_db
 from routes.auth import auth_bp
 from routes.quizzes import quizzes_bp
 from routes.analytics import analytics_bp
 from routes.admin import admin_bp
 from routes.api import api_bp
-from models.db import init_db, get_db
-from models.user import User, init_user_table
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -202,7 +205,7 @@ def index():
 @login_required
 def dashboard():
     """Render the dashboard page."""
-    # Mock data for the dashboard - in a real implementation, these would be fetched from the database
+    # Fetch real data for the dashboard
     user_stats = {
         'quiz_count': 0,
         'recent_score': 'N/A',
@@ -212,6 +215,87 @@ def dashboard():
     
     recent_activity = []
     user_quizzes = []
+    
+    try:
+        conn = get_db()
+        with conn.cursor() as cursor:
+            # Count quizzes created by user
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM quizzes 
+                WHERE creator_id = %s
+            """, (current_user.discord_id,))
+            user_stats['quiz_count'] = cursor.fetchone()['count']
+            
+            # Count questions created by user
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM questions q
+                JOIN quizzes qz ON q.quiz_id = qz.quiz_id
+                WHERE qz.creator_id = %s
+            """, (current_user.discord_id,))
+            user_stats['question_count'] = cursor.fetchone()['count']
+            
+            # Count quizzes taken by user
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM user_scores 
+                WHERE user_id = %s
+            """, (current_user.discord_id,))
+            user_stats['quizzes_taken'] = cursor.fetchone()['count']
+            
+            # Get most recent score
+            cursor.execute("""
+                SELECT score 
+                FROM user_scores 
+                WHERE user_id = %s 
+                ORDER BY completion_date DESC 
+                LIMIT 1
+            """, (current_user.discord_id,))
+            recent_score = cursor.fetchone()
+            if recent_score:
+                user_stats['recent_score'] = f"{recent_score['score']}%"
+            
+            # Get recent activity
+            cursor.execute("""
+                SELECT us.*, q.quiz_name, q.quiz_id
+                FROM user_scores us
+                JOIN quizzes q ON us.quiz_id = q.quiz_id
+                WHERE us.user_id = %s
+                ORDER BY us.completion_date DESC
+                LIMIT 5
+            """, (current_user.discord_id,))
+            activity_data = cursor.fetchall()
+            
+            for item in activity_data:
+                action = "Completed Quiz"
+                recent_activity.append({
+                    'action': action,
+                    'description': f"Scored {item['score']}% on {item['quiz_name']}",
+                    'timestamp': item['completion_date'].strftime('%Y-%m-%d %H:%M')
+                })
+            
+            # Get user's quizzes
+            cursor.execute("""
+                SELECT q.quiz_id as id, q.quiz_name as name, q.created_at,
+                       COUNT(DISTINCT qu.question_id) as question_count,
+                       COUNT(DISTINCT us.id) as completion_count
+                FROM quizzes q
+                LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
+                LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
+                WHERE q.creator_id = %s
+                GROUP BY q.quiz_id, q.quiz_name, q.created_at
+                ORDER BY q.created_at DESC
+                LIMIT 5
+            """, (current_user.discord_id,))
+            user_quizzes = cursor.fetchall()
+            
+            # Format created_at dates
+            for quiz in user_quizzes:
+                if 'created_at' in quiz and quiz['created_at']:
+                    quiz['created_at'] = quiz['created_at'].strftime('%Y-%m-%d')
+    except Exception as e:
+        logger.error(f"Error fetching dashboard data: {e}")
     
     return render_template(
         'dashboard.html',
