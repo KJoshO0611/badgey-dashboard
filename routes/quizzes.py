@@ -197,18 +197,18 @@ def add_question(quiz_id):
         
         # Extract form data
         question_text = request.form.get('question')
-        options = []
         
-        # Get options dynamically
-        i = 0
-        while f'option{i}' in request.form:
-            option = request.form.get(f'option{i}')
-            if option.strip():  # Only add non-empty options
-                options.append(option)
-            i += 1
+        # Process lettered options (A, B, C, etc.)
+        options = {}
+        letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+        for letter in letters:
+            if f'option{letter}' in request.form:
+                option_value = request.form.get(f'option{letter}')
+                if option_value.strip():  # Only add non-empty options
+                    options[letter] = option_value
         
         # Get correct answer and score
-        correct_answer = request.form.get('correct_answer', 0)
+        correct_answer = request.form.get('correct_answer', 'A')
         score = request.form.get('score', 10)
         explanation = request.form.get('explanation', '')
         
@@ -226,7 +226,7 @@ def add_question(quiz_id):
         quiz.add_question(
             text=question_text,
             options=options,
-            correct_answer=int(correct_answer),
+            correct_answer=correct_answer,
             score=int(score),
             explanation=explanation
         )
@@ -265,18 +265,18 @@ def edit_question(quiz_id, question_id):
         
         # Extract form data
         question_text = request.form.get('question')
-        options = []
         
-        # Get options dynamically
-        i = 0
-        while f'option{i}' in request.form:
-            option = request.form.get(f'option{i}')
-            if option.strip():  # Only add non-empty options
-                options.append(option)
-            i += 1
+        # Process lettered options (A, B, C, etc.)
+        options = {}
+        letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+        for letter in letters:
+            if f'option{letter}' in request.form:
+                option_value = request.form.get(f'option{letter}')
+                if option_value.strip():  # Only add non-empty options
+                    options[letter] = option_value
         
         # Get correct answer and score
-        correct_answer = request.form.get('correct_answer', 0)
+        correct_answer = request.form.get('correct_answer', 'A')
         score = request.form.get('score', 10)
         explanation = request.form.get('explanation', '')
         
@@ -294,7 +294,7 @@ def edit_question(quiz_id, question_id):
         question.update(
             text=question_text,
             options=options,
-            correct_answer=int(correct_answer),
+            correct_answer=correct_answer,
             score=int(score),
             explanation=explanation
         )

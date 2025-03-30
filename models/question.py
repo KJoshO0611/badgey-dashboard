@@ -68,17 +68,30 @@ class Question:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                # Ensure options is properly formatted for the database
+                # Ensure options is properly formatted for the database with lettered keys
+                formatted_options = {}
+                
+                # Convert array to lettered format if needed
                 if isinstance(options, list):
-                    options_str = '|'.join(options)
+                    letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+                    for i, option in enumerate(options):
+                        if i < len(letters):
+                            formatted_options[letters[i]] = option
+                # If already a dict with lettered keys, use as is
                 elif isinstance(options, dict):
-                    # Convert dictionary to JSON string
-                    options_str = json.dumps(options)
+                    formatted_options = options
+                # If string, convert to dict (assuming it's already in JSON format)
                 elif isinstance(options, str):
-                    # Keep as is if already a string
-                    options_str = options
+                    try:
+                        formatted_options = json.loads(options)
+                    except:
+                        # If not valid JSON, create a single option
+                        formatted_options = {"A": options}
                 else:
-                    options_str = json.dumps({})  # Empty JSON object as fallback
+                    formatted_options = {}
+                
+                # Convert to JSON string
+                options_json = json.dumps(formatted_options)
                 
                 # Use question_text column instead of question
                 cursor.execute(
@@ -87,7 +100,7 @@ class Question:
                     (quiz_id, question_text, options, correct_answer, score, explanation) 
                     VALUES (%s, %s, %s, %s, %s, %s)
                     """, 
-                    (quiz_id, text, options_str, correct_answer, score, explanation)
+                    (quiz_id, text, options_json, correct_answer, score, explanation)
                 )
                 conn.commit()
                 
@@ -98,7 +111,7 @@ class Question:
                     id=question_id,
                     quiz_id=quiz_id,
                     text=text,
-                    options=options,
+                    options=formatted_options,
                     correct_answer=correct_answer,
                     score=score,
                     explanation=explanation
@@ -122,21 +135,34 @@ class Question:
                     self.text = text
                 
                 if options is not None:
-                    # Ensure options is properly formatted for the database
+                    # Ensure options is properly formatted for the database with lettered keys
+                    formatted_options = {}
+                    
+                    # Convert array to lettered format if needed
                     if isinstance(options, list):
-                        options_str = '|'.join(options)
+                        letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+                        for i, option in enumerate(options):
+                            if i < len(letters):
+                                formatted_options[letters[i]] = option
+                    # If already a dict with lettered keys, use as is
                     elif isinstance(options, dict):
-                        # Convert dictionary to JSON string
-                        options_str = json.dumps(options)
+                        formatted_options = options
+                    # If string, convert to dict (assuming it's already in JSON format)
                     elif isinstance(options, str):
-                        # Keep as is if already a string
-                        options_str = options
+                        try:
+                            formatted_options = json.loads(options)
+                        except:
+                            # If not valid JSON, create a single option
+                            formatted_options = {"A": options}
                     else:
-                        options_str = json.dumps({})  # Empty JSON object as fallback
+                        formatted_options = {}
+                    
+                    # Convert to JSON string
+                    options_json = json.dumps(formatted_options)
                     
                     update_parts.append("options = %s")
-                    params.append(options_str)
-                    self.options = options
+                    params.append(options_json)
+                    self.options = formatted_options
                 
                 if correct_answer is not None:
                     update_parts.append("correct_answer = %s")

@@ -2,17 +2,18 @@
 
 /* Global Styles */
 :root {
-    --primary-color: #5865F2;
-    --secondary-color: #36393F;
-    --accent-color: #EB459E;
-    --success-color: #57F287;
-    --danger-color: #ED4245;
-    --warning-color: #FEE75C;
-    --info-color: #5865F2;
-    --light-color: #FFFFFF;
-    --dark-color: #2C2F33;
-    --gray-color: #99AAB5;
-    --background-color: #F8F9FA;
+    /* Badgey from Star Trek: Lower Decks color scheme */
+    --primary-color: #FFD700;    /* Badgey yellow/gold */
+    --secondary-color: #111111;  /* Dark black */
+    --accent-color: #FF5349;     /* Red/orange accent */
+    --success-color: #00B74A;    /* Green for success */
+    --danger-color: #F93154;     /* Red for danger/errors */
+    --warning-color: #FFA900;    /* Amber warning */
+    --info-color: #39C0ED;       /* Blue info */
+    --light-color: #F5F5F5;      /* Off-white */
+    --dark-color: #262626;       /* Dark gray/black */
+    --gray-color: #4F4F4F;       /* Medium gray */
+    --background-color: #F8F9FA; /* Light background */
 }
 
 /* Sticky Footer Setup */
@@ -34,21 +35,37 @@ main {
 
 /* Custom Bootstrap Overrides */
 .bg-primary {
-    background-color: var(--primary-color) !important;
+    background-color: var(--secondary-color) !important;
 }
 
 .bg-secondary {
-    background-color: var(--secondary-color) !important;
+    background-color: var(--primary-color) !important;
 }
 
 .btn-primary {
     background-color: var(--primary-color);
     border-color: var(--primary-color);
+    color: var(--secondary-color);
 }
 
 .btn-primary:hover {
-    background-color: #4752c4;
-    border-color: #4752c4;
+    background-color: #E6C200; /* Darker yellow */
+    border-color: #E6C200;
+    color: var(--secondary-color);
+}
+
+.btn-outline-primary {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color);
+    color: var(--secondary-color);
+}
+
+.text-primary {
+    color: var(--primary-color) !important;
 }
 
 /* Card Styles */
@@ -81,10 +98,15 @@ main {
 
 .navbar-brand {
     font-weight: 600;
+    color: var(--primary-color) !important;
 }
 
 .navbar-dark .navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--primary-color);
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    color: #E6C200; /* Darker yellow */
 }
 
 /* Table Styles */
@@ -95,13 +117,13 @@ main {
 }
 
 .table-hover tbody tr:hover {
-    background-color: rgba(88, 101, 242, 0.05);
+    background-color: rgba(255, 215, 0, 0.1); /* Light yellow highlight */
 }
 
 /* Form Styles */
 .form-control:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(88, 101, 242, 0.25);
+    box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.25);
 }
 
 /* Quiz Management Styles */
@@ -129,6 +151,7 @@ main {
     font-size: 2.5rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
+    color: var(--primary-color);
 }
 
 .metric-label {
@@ -165,7 +188,7 @@ main {
     justify-content: center;
     border-radius: 50%;
     background-color: var(--primary-color);
-    color: var(--light-color);
+    color: var(--secondary-color);
     margin-right: 0.5rem;
     font-weight: 600;
 }
@@ -212,6 +235,7 @@ main {
 /* Footer Styles */
 .footer {
     width: 100%;
-    background-color: var(--light-color);
+    background-color: var(--secondary-color);
     border-top: 1px solid rgba(0, 0, 0, 0.1);
+    color: var(--primary-color);
 } 
