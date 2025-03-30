@@ -67,7 +67,7 @@
                                 {% set question_index = loop.index %}
                                 {% for letter, option_text in question.options.items() %}
                                     <div class="form-check mb-3">
-                                        <input class="form-check-input" type="radio" name="question{{ question_index }}" id="q{{ question_index }}option{{ letter }}" value="{{ letter }}" data-correct="{{ letter == question.correct_answer }}">
+                                        <input class="form-check-input" type="radio" name="question{{ question_index }}" id="q{{ question_index }}option{{ letter }}" value="{{ letter }}" data-correct="{{ 'true' if letter == question.correct_answer else 'false' }}">
                                         <label class="form-check-label" for="q{{ question_index }}option{{ letter }}">
                                             {{ letter }}. {{ option_text }}
                                         </label>
@@ -157,6 +157,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const quizDataElement = document.getElementById('quiz-data');
     const quizData = JSON.parse(quizDataElement.textContent);
     
+    // Debug: Check if data-correct attributes are set correctly
+    document.querySelectorAll('.question-slide').forEach((slide, idx) => {
+        console.log(`Question ${idx+1} correct answer check:`);
+        const options = slide.querySelectorAll('input[type="radio"]');
+        options.forEach(option => {
+            console.log(`Option ${option.value}: data-correct=${option.dataset.correct}`);
+        });
+        
+        // Make sure at least one option is marked as correct
+        const correctOption = slide.querySelector('input[data-correct="true"]');
+        if (!correctOption) {
+            console.error(`Question ${idx+1} has no correct answer marked!`);
+        }
+    });
+    
     // Initialize UI elements
     const quizIntro = document.getElementById('quizIntro');
     const quizContent = document.getElementById('quizContent');
@@ -231,8 +246,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle check answer buttons
     document.querySelectorAll('.check-answer-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            console.log('Check answer button clicked');
             const questionSlide = this.closest('.question-slide');
             const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
+            console.log('Question index:', questionIndex);
             
             // Check if an option is selected
             const selectedOption = questionSlide.querySelector('input[type="radio"]:checked');
@@ -240,6 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Please select an answer');
                 return;
             }
+            
+            console.log('Selected option:', selectedOption.value);
+            console.log('Is correct:', selectedOption.dataset.correct);
             
             // Show feedback
             const feedbackContainer = questionSlide.querySelector('.feedback-container');
@@ -267,8 +287,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Show which answer was correct
                 const correctOption = questionSlide.querySelector('input[data-correct="true"]');
-                const correctAnswerText = correctOption.nextElementSibling.textContent.trim();
-                questionSlide.querySelector('.correct-answer-text').textContent = correctAnswerText;
+                if (correctOption) {
+                    // Get the full label text including the option content
+                    const correctAnswerLabel = correctOption.nextElementSibling;
+                    const correctAnswerText = correctAnswerLabel.textContent.trim();
+                    const correctAnswerElement = questionSlide.querySelector('.correct-answer-text');
+                    if (correctAnswerElement) {
+                        correctAnswerElement.textContent = correctAnswerText;
+                    }
+                    
+                    // Debug to verify the correct answer is properly identified
+                    console.log('Correct option letter:', correctOption.value);
+                    console.log('Correct option text:', correctAnswerText);
+                }
             }
             
             // Show explanation if available
