@@ -11,11 +11,12 @@ class QuizNotFoundError(Exception):
 class Quiz:
     """Quiz model for quiz management"""
     
-    def __init__(self, id, name, creator_id, created_at=None):
+    def __init__(self, id, name, creator_id, created_at=None, creator_username=None):
         self.id = id
         self.name = name
         self.creator_id = creator_id
         self.created_at = created_at or datetime.now()
+        self.creator_username = creator_username
     
     @property
     def quiz_id(self):
@@ -33,6 +34,7 @@ class Quiz:
             'id': self.id,
             'name': self.name,
             'creator_id': self.creator_id,
+            'creator_username': self.creator_username,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
     
@@ -42,7 +44,12 @@ class Quiz:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM quizzes WHERE quiz_id = %s", (quiz_id,))
+                cursor.execute("""
+                    SELECT q.*, u.username as creator_username 
+                    FROM quizzes q
+                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
+                    WHERE q.quiz_id = %s
+                """, (quiz_id,))
                 quiz_data = cursor.fetchone()
                 
                 if not quiz_data:
@@ -56,7 +63,8 @@ class Quiz:
                     id=quiz_data['quiz_id'],
                     name=quiz_data['quiz_name'],
                     creator_id=quiz_data['creator_id'],
-                    created_at=created_at
+                    created_at=created_at,
+                    creator_username=quiz_data.get('creator_username')
                 )
         except Exception as e:
             if isinstance(e, QuizNotFoundError):
@@ -70,7 +78,12 @@ class Quiz:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM quizzes ORDER BY quiz_id DESC")
+                cursor.execute("""
+                    SELECT q.*, u.username as creator_username 
+                    FROM quizzes q
+                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
+                    ORDER BY q.quiz_id DESC
+                """)
                 quizzes = cursor.fetchall()
                 
                 result = []
@@ -83,7 +96,8 @@ class Quiz:
                         id=quiz_data['quiz_id'],
                         name=quiz_data['quiz_name'],
                         creator_id=quiz_data['creator_id'],
-                        created_at=created_at
+                        created_at=created_at,
+                        creator_username=quiz_data.get('creator_username')
                     ))
                 
                 return result
@@ -98,7 +112,13 @@ class Quiz:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM quizzes WHERE creator_id = %s ORDER BY quiz_id DESC", (creator_id,))
+                cursor.execute("""
+                    SELECT q.*, u.username as creator_username 
+                    FROM quizzes q
+                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
+                    WHERE q.creator_id = %s 
+                    ORDER BY q.quiz_id DESC
+                """, (creator_id,))
                 quizzes = cursor.fetchall()
                 
                 result = []
@@ -111,7 +131,8 @@ class Quiz:
                         id=quiz_data['quiz_id'],
                         name=quiz_data['quiz_name'],
                         creator_id=quiz_data['creator_id'],
-                        created_at=created_at
+                        created_at=created_at,
+                        creator_username=quiz_data.get('creator_username')
                     ))
                 
                 return result

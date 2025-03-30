@@ -41,7 +41,7 @@
                         {% for quiz in quizzes %}
                             <tr class="quiz-row">
                                 <td>{{ quiz.name }}</td>
-                                <td>{{ quiz.creator_id }}</td>
+                                <td>{{ quiz.creator_username or quiz.creator_id }}</td>
                                 <td>{{ quiz.question_count or 0 }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">

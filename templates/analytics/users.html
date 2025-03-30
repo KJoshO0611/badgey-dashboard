@@ -190,12 +190,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    yAxes: [{
+                    y: {
+                        beginAtZero: true,
                         ticks: {
-                            beginAtZero: true,
                             precision: 0
                         }
-                    }]
+                    }
                 }
             }
         });

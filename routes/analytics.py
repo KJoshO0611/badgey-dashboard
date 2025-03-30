@@ -47,13 +47,15 @@ def quizzes():
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT q.quiz_id, q.quiz_name, q.creator_id as creator, 
+                SELECT q.quiz_id, q.quiz_name, 
+                       u.username as creator, 
                        COUNT(DISTINCT us.id) as attempts, AVG(us.score) as avg_score,
                        COUNT(DISTINCT qu.question_id) as question_count
                 FROM quizzes q
+                LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
                 LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
                 LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                GROUP BY q.quiz_id, q.quiz_name, q.creator_id
+                GROUP BY q.quiz_id, q.quiz_name, u.username
                 ORDER BY attempts DESC
             """)
             quiz_data = cursor.fetchall()
