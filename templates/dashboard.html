@@ -23,11 +23,11 @@
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
             {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
-                <a href="{{ url_for('quizzes.create_quiz') }}" class="btn btn-sm btn-outline-primary">
+                <a href="{{ url_for('quizzes.create') }}" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-plus me-1"></i>Create Quiz
                 </a>
             {% endif %}
-            <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-sm btn-outline-secondary">
+            <a href="{{ url_for('quizzes.list') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-folder me-1"></i>My Quizzes
             </a>
         </div>
@@ -158,7 +158,7 @@
                 </div>
             </div>
             <div class="card-footer text-end">
-                <a href="{{ url_for('quizzes.my_quizzes') }}" class="btn btn-sm btn-outline-primary">View All Quizzes</a>
+                <a href="{{ url_for('quizzes.list') }}" class="btn btn-sm btn-outline-primary">View All Quizzes</a>
             </div>
         </div>
     </div>
