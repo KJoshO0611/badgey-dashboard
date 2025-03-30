@@ -1,6 +1,6 @@
 import os
 import logging
-from flask import Flask, render_template, redirect, url_for, flash, jsonify, session, request
+from flask import Flask, render_template, redirect, url_for, flash, jsonify, session, request, make_response
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
@@ -8,6 +8,9 @@ import click
 from datetime import datetime, timedelta
 import urllib.parse
 import sqlalchemy as sa
+import gzip
+from io import BytesIO
+import functools
 
 # Load environment variables
 load_dotenv()
@@ -71,6 +74,9 @@ app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
+# List of keys to exclude from session storage (to reduce size)
+app.config['SESSION_EXCLUDE_KEYS'] = ['large_data', 'temp_data', '_csrf_token']
+
 # Create the database engine (without models, just for raw SQL)
 db = sa.create_engine(engine_url)
 
@@ -97,6 +103,64 @@ def format_datetime(value, format='%Y-%m-%d %H:%M'):
         except ValueError:
             return value
     return value.strftime(format)
+
+# HTTP optimizations
+
+# Gzip compression
+def gzip_response(f):
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        response = f(*args, **kwargs)
+        
+        # Don't compress small responses or already compressed responses
+        if (response.status_code != 200 or
+                len(response.get_data()) < 500 or  # Less than 500 bytes
+                'Content-Encoding' in response.headers or
+                not response.headers.get('Content-Type', '').startswith(('text/', 'application/json', 'application/javascript'))):
+            return response
+            
+        # Check if client accepts gzip encoding
+        if 'gzip' not in request.headers.get('Accept-Encoding', ''):
+            return response
+            
+        # Compress the response
+        gzip_buffer = BytesIO()
+        with gzip.GzipFile(mode='wb', fileobj=gzip_buffer) as gzip_file:
+            gzip_file.write(response.get_data())
+        
+        # Update response with compressed data
+        response.set_data(gzip_buffer.getvalue())
+        response.headers['Content-Encoding'] = 'gzip'
+        response.headers['Content-Length'] = len(response.get_data())
+        response.headers['Vary'] = 'Accept-Encoding'
+        
+        return response
+    return wrapped
+
+# Apply gzip compression to all responses
+app.after_request(gzip_response)
+
+# Add browser caching headers for static content
+@app.after_request
+def add_cache_headers(response):
+    # Only add cache headers to successful responses
+    if response.status_code < 400:
+        # Static files (CSS, JS, images)
+        if request.path.startswith('/static/'):
+            # Cache for 1 week
+            response.headers['Cache-Control'] = 'public, max-age=604800'
+        elif request.path.startswith('/assets/'):
+            # Cache for 1 day
+            response.headers['Cache-Control'] = 'public, max-age=86400'
+        else:
+            # Default to no-cache for dynamic content
+            if 'Cache-Control' not in response.headers:
+                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    
+    # Add additional performance headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    return response
 
 # Initialize login manager
 login_manager = LoginManager()

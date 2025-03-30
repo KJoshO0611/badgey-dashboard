@@ -113,64 +113,9 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         if self.key_prefix and sid.startswith(self.key_prefix):
             sid = sid[len(self.key_prefix):]
         
-        # Look up the session in the database
-        try:
-            # Use raw SQL to avoid SQLAlchemy model issues
-            conn = self.db.connect()
-            trans = conn.begin()  # Start a transaction explicitly
-            
-            try:
-                result = conn.execute(
-                    sa.select(self.table.c.data, self.table.c.expires_at)
-                    .where(self.table.c.id == sid)
-                ).fetchone()
-                
-                trans.commit()  # Commit the read transaction
-                
-                if result is None:
-                    # No session found, create a new one
-                    new_sid = self._generate_sid()
-                    app.logger.debug(f"Session not found in DB, creating new session: {new_sid}")
-                    return self.session_class(sid=new_sid, permanent=True)
-                    
-                data, expires = result
-                
-                # Check if the session has expired
-                if expires is not None and expires < datetime.utcnow():
-                    app.logger.debug(f"Session expired, deleting: {sid}")
-                    self._delete_session(sid)  # This handles its own transaction
-                    
-                    new_sid = self._generate_sid()
-                    app.logger.debug(f"Creating new session after expiration: {new_sid}")
-                    return self.session_class(sid=new_sid, permanent=True)
-                    
-                # Load the data
-                try:
-                    if data:
-                        data = b64decode(data.encode('utf-8'))
-                        session_data = self.serializer.loads(data)
-                        app.logger.debug(f"Successfully loaded session data for sid: {sid}")
-                        return self.session_class(session_data, sid=sid, permanent=True)
-                    else:
-                        app.logger.warning(f"Empty session data for sid: {sid}, creating new session")
-                        return self.session_class(sid=sid, permanent=True)
-                except Exception as e:
-                    app.logger.error(f"Error deserializing session data: {e}")
-                    return self.session_class(sid=sid, permanent=True)
-                    
-            except Exception as e:
-                # Rollback the transaction in case of error during read
-                trans.rollback()
-                app.logger.error(f"Database error while reading session: {e}")
-                new_sid = self._generate_sid()
-                return self.session_class(sid=new_sid, permanent=True)
-            finally:
-                conn.close()
-        except Exception as e:
-            # Log the error and create a new session
-            app.logger.error(f"Error loading session: {e}")
-            new_sid = self._generate_sid()
-            return self.session_class(sid=new_sid, permanent=True)
+        # For performance: don't load the session data unless it's necessary
+        # Return a session object that will lazy-load its data
+        return LazyLoadingSession(sid=sid, session_interface=self, app=app, permanent=True)
     
     def save_session(self, app, session, response):
         """Save the session to the database."""
@@ -184,6 +129,11 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 self._delete_session(session.sid)
                 response.delete_cookie(cookie_name, domain=domain, path=path)
                 app.logger.debug(f"Deleted empty session: {session.sid}")
+            return
+            
+        # Important optimization: Only save if the session was actually modified
+        if not session.modified:
+            app.logger.debug(f"Session not modified, skipping database save: {session.sid}")
             return
         
         # Determine when the session should expire
@@ -206,9 +156,24 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             app.logger.error(f"Error getting user ID for session, using default: {e}")
             user_id = 1  # Default to guest user ID
         
+        # Minimize session data size - only store essential data
+        # Create a filtered copy that only includes necessary data
+        essential_data = {}
+        for key, value in dict(session).items():
+            # Skip large objects or non-essential data
+            if key.startswith('_') or key in app.config.get('SESSION_EXCLUDE_KEYS', []):
+                continue
+                
+            # Special handling for user data - only store ID not the entire object
+            if key == 'user' and hasattr(value, 'id'):
+                essential_data['user_id'] = value.id
+                continue
+                
+            essential_data[key] = value
+        
         # Serialize the session data
         try:
-            serialized_data = self.serializer.dumps(dict(session))
+            serialized_data = self.serializer.dumps(essential_data)
             data = b64encode(serialized_data).decode('utf-8')
             app.logger.debug(f"Serialized session data for sid: {sid}")
         except Exception as e:
@@ -311,4 +276,111 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             finally:
                 conn.close()
         except Exception as e:
-            current_app.logger.error(f"Error deleting session: {e}") 
+            current_app.logger.error(f"Error deleting session: {e}")
+
+# New class for lazy loading session data
+class LazyLoadingSession(CustomSqlAlchemySession):
+    """Session class that only loads data from the database when accessed."""
+    
+    def __init__(self, sid, session_interface, app, permanent=None):
+        self.sid = sid
+        self.session_interface = session_interface
+        self.app = app
+        self._loaded = False
+        self._data = {}
+        if permanent:
+            self.permanent = permanent
+        self.modified = False
+        
+    def _load(self):
+        """Load session data from the database when needed."""
+        if self._loaded:
+            return
+            
+        try:
+            # Load session data from database
+            conn = self.session_interface.db.connect()
+            trans = conn.begin()
+            
+            try:
+                result = conn.execute(
+                    sa.select(self.session_interface.table.c.data, self.session_interface.table.c.expires_at)
+                    .where(self.session_interface.table.c.id == self.sid)
+                ).fetchone()
+                
+                trans.commit()
+                
+                if result and result.data:
+                    data, expires = result
+                    
+                    # Check if the session has expired
+                    if expires is not None and expires < datetime.utcnow():
+                        self.app.logger.debug(f"Session expired: {self.sid}")
+                        # Just use empty session data
+                        self._data = {}
+                    else:
+                        # Load the data
+                        try:
+                            decoded_data = b64decode(data.encode('utf-8'))
+                            session_data = self.session_interface.serializer.loads(decoded_data)
+                            self._data = session_data
+                            self.app.logger.debug(f"Successfully loaded session data for sid: {self.sid}")
+                        except Exception as e:
+                            self.app.logger.error(f"Error deserializing session data: {e}")
+                            self._data = {}
+                else:
+                    self._data = {}
+            except Exception as e:
+                # Rollback the transaction in case of error
+                trans.rollback()
+                self.app.logger.error(f"Database error while reading session: {e}")
+                self._data = {}
+            finally:
+                conn.close()
+        except Exception as e:
+            # Log the error and create a new session
+            self.app.logger.error(f"Error loading session: {e}")
+            self._data = {}
+            
+        self._loaded = True
+        
+    def __getitem__(self, key):
+        self._load()
+        return self._data.get(key)
+        
+    def __setitem__(self, key, value):
+        self._load()
+        self._data[key] = value
+        self.modified = True
+        
+    def __delitem__(self, key):
+        self._load()
+        if key in self._data:
+            del self._data[key]
+            self.modified = True
+            
+    def __iter__(self):
+        self._load()
+        return iter(self._data)
+        
+    def __len__(self):
+        self._load()
+        return len(self._data)
+        
+    def __contains__(self, key):
+        self._load()
+        return key in self._data
+        
+    def get(self, key, default=None):
+        self._load()
+        return self._data.get(key, default)
+        
+    def pop(self, key, default=None):
+        self._load()
+        self.modified = True
+        return self._data.pop(key, default)
+        
+    def clear(self):
+        self._load()
+        self._data.clear()
+        self.modified = True 
