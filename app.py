@@ -6,8 +6,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import click
 from datetime import datetime, timedelta
-from flask_session import Session
 import urllib.parse
+import sqlalchemy as sa
 
 # Load environment variables
 load_dotenv()
@@ -43,22 +43,29 @@ app.config['DATABASE'] = {
 }
 
 # Session configuration
-app.config['SESSION_TYPE'] = 'sqlalchemy'
+# You have two options:
 
-# URL encode username and password to handle special characters
+# Option 1: Use built-in cookie-based sessions (simpler, but doesn't use dashboard_sessions table)
+#app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+#app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+#app.config['SESSION_COOKIE_HTTPONLY'] = True
+#app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Option 2: Use custom database sessions that work with your dashboard_sessions schema
+# Create SQLAlchemy engine for session storage
 username = urllib.parse.quote_plus(app.config['DATABASE']['user'])
 password = urllib.parse.quote_plus(app.config['DATABASE']['password'])
 host = app.config['DATABASE']['host']
 port = app.config['DATABASE']['port']
 database = app.config['DATABASE']['database']
+engine_url = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
-app.config['SESSION_SQLALCHEMY_TABLE'] = 'dashboard_sessions'
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+# Create the database engine (without models, just for raw SQL)
+db = sa.create_engine(engine_url)
 
-# Initialize Flask-Session
-Session(app)
+# Import and use our custom session interface
+from custom_session import CustomSqlAlchemySessionInterface
+app.session_interface = CustomSqlAlchemySessionInterface(db=db)
 
 app.config['DISCORD_CLIENT_ID'] = os.getenv('DISCORD_CLIENT_ID')
 app.config['DISCORD_CLIENT_SECRET'] = os.getenv('DISCORD_CLIENT_SECRET')

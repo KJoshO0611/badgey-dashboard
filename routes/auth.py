@@ -184,22 +184,13 @@ def auth_callback():
         
         # Log this login to dashboard_logs
         try:
-            from models.db import get_db
-            conn = get_db()
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO dashboard_logs (user_id, action, details, ip_address)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (
-                        db_user.id,
-                        "login",
-                        f"User logged in via Discord OAuth",
-                        request.remote_addr
-                    )
-                )
-                conn.commit()
+            from models.db import log_activity
+            log_activity(
+                user_id=db_user.id,
+                action="login",
+                details=f"User logged in via Discord OAuth",
+                ip_address=request.remote_addr
+            )
         except Exception as e:
             logger.error(f"Error logging user login: {str(e)}")
         
@@ -219,22 +210,13 @@ def logout():
     """Log out the user."""
     # Log this logout to dashboard_logs
     try:
-        from models.db import get_db
-        conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO dashboard_logs (user_id, action, details, ip_address)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (
-                    current_user.id,
-                    "logout",
-                    f"User logged out",
-                    request.remote_addr
-                )
-            )
-            conn.commit()
+        from models.db import log_activity
+        log_activity(
+            user_id=current_user.id,
+            action="logout",
+            details=f"User logged out",
+            ip_address=request.remote_addr
+        )
     except Exception as e:
         logger.error(f"Error logging user logout: {str(e)}")
     

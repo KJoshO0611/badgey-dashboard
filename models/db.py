@@ -83,4 +83,31 @@ def init_db():
 
 def init_app(app):
     """Register database functions with the Flask app."""
-    app.teardown_appcontext(close_db) 
+    app.teardown_appcontext(close_db)
+
+def log_activity(user_id, action, details, ip_address=None):
+    """
+    Log user activity to dashboard_logs table
+    
+    Args:
+        user_id (int): User ID
+        action (str): Action performed (login, logout, etc.)
+        details (str): Additional details about the action
+        ip_address (str, optional): IP address of the user
+    """
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO dashboard_logs (user_id, action, details, ip_address) 
+                VALUES (%s, %s, %s, %s)
+                """,
+                (user_id, action, details, ip_address)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error logging activity: {e}")
+        conn.rollback()
+    finally:
+        conn.close() 
