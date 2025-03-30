@@ -70,12 +70,13 @@
                                     <div class="mb-3">
                                         <label class="form-label">Options</label>
                                         <div id="optionsContainer{{ question.id }}">
-                                            {% for option in question.options %}
+                                            {% for letter, option_text in question.options.items() %}
                                                 <div class="input-group mb-2">
                                                     <div class="input-group-text">
-                                                        <input class="form-check-input mt-0" type="radio" name="correct_answer" value="{{ loop.index0 }}" {% if loop.index0 == question.correct_answer|int %}checked{% endif %} required>
+                                                        <input class="form-check-input mt-0" type="radio" name="correct_answer" value="{{ letter }}" {% if letter == question.correct_answer %}checked{% endif %} required>
+                                                        <span class="ms-1">{{ letter }}</span>
                                                     </div>
-                                                    <input type="text" class="form-control" name="option{{ loop.index0 }}" value="{{ option }}" required>
+                                                    <input type="text" class="form-control" name="option{{ letter }}" value="{{ option_text }}" required>
                                                     {% if loop.index > 2 %}
                                                         <button type="button" class="btn btn-outline-danger remove-option">
                                                             <i class="fas fa-times"></i>

@@ -107,7 +107,7 @@ class Question:
                 params = []
                 
                 if text is not None:
-                    update_parts.append("question_text = %s")
+                    update_parts.append("question = %s")
                     params.append(text)
                     self.text = text
                 
@@ -143,7 +143,7 @@ class Question:
                 
                 if correct_answer is not None:
                     update_parts.append("correct_answer = %s")
-                    params.append(correct_answer)
+                    params.append(str(correct_answer))
                     self.correct_answer = correct_answer
                 
                 if score is not None:
@@ -170,6 +170,7 @@ class Question:
                 return True
         except Exception as e:
             print(f"Error updating question: {e}")
+            conn.rollback()
             return False
     
     def delete(self):
