@@ -71,22 +71,22 @@ def index():
 @login_required
 def dashboard():
     """Render the dashboard page."""
-    quiz_count = 0
-    recent_quizzes = []
-    user_score = 0
-    questions_count = 0
-    quizzes_taken = 0
+    # Mock data for the dashboard - in a real implementation, these would be fetched from the database
+    user_stats = {
+        'quiz_count': 0,
+        'recent_score': 'N/A',
+        'question_count': 0,
+        'quizzes_taken': 0
+    }
     
-    # In a real implementation, these would be fetched from the database
-    # based on the current user's ID
+    recent_activity = []
+    user_quizzes = []
     
     return render_template(
         'dashboard.html',
-        quiz_count=quiz_count,
-        recent_quizzes=recent_quizzes,
-        user_score=user_score,
-        questions_count=questions_count,
-        quizzes_taken=quizzes_taken
+        user_stats=user_stats,
+        recent_activity=recent_activity,
+        user_quizzes=user_quizzes
     )
 
 @app.route('/health')
