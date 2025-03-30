@@ -98,7 +98,7 @@ class Quiz:
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT * FROM quizzes WHERE creator_id = %s ORDER BY created_at DESC", (creator_id,))
+                cursor.execute("SELECT * FROM quizzes WHERE creator_id = %s ORDER BY quiz_id DESC", (creator_id,))
                 quizzes = cursor.fetchall()
                 
                 result = []
@@ -212,7 +212,7 @@ class Quiz:
             query = """
             SELECT * FROM user_scores 
             WHERE quiz_id = %s 
-            ORDER BY score DESC, timestamp ASC
+            ORDER BY score DESC, completed_at ASC
             """
             
             if limit:
