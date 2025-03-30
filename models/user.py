@@ -88,7 +88,7 @@ class User(UserMixin):
             with conn.cursor() as cursor:
                 # Check if user exists
                 cursor.execute(
-                    "SELECT id FROM dashboard_users WHERE discord_id = %s",
+                    "SELECT id, roles FROM dashboard_users WHERE discord_id = %s",
                     (discord_id,)
                 )
                 existing_user = cursor.fetchone()
@@ -96,17 +96,23 @@ class User(UserMixin):
                 roles_json = json.dumps(roles) if roles else None
                 
                 if existing_user:
-                    # Update existing user
+                    # Update existing user but preserve their roles
                     cursor.execute(
                         """
                         UPDATE dashboard_users
-                        SET username = %s, discriminator = %s, avatar = %s, email = %s, 
-                            roles = IFNULL(%s, roles)
+                        SET username = %s, discriminator = %s, avatar = %s, email = %s
                         WHERE discord_id = %s
                         """,
-                        (username, discriminator, avatar, email, roles_json, discord_id)
+                        (username, discriminator, avatar, email, discord_id)
                     )
                     user_id = existing_user['id']
+                    
+                    # Only set roles if this is a new user (don't overwrite existing roles on login)
+                    if roles and not existing_user['roles']:
+                        cursor.execute(
+                            "UPDATE dashboard_users SET roles = %s WHERE discord_id = %s",
+                            (roles_json, discord_id)
+                        )
                 else:
                     # Create new user
                     cursor.execute(
