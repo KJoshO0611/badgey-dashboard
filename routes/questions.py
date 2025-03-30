@@ -67,7 +67,7 @@ def create(quiz_id):
     
     except QuizNotFoundError:
         flash('Quiz not found', 'error')
-        return redirect(url_for('quizzes.list_quizzes'))
+        return redirect(url_for('quizzes.list'))
 
 @questions_bp.route('/edit/<int:question_id>', methods=['GET', 'POST'])
 @login_required
@@ -129,10 +129,10 @@ def edit(question_id):
     
     except QuestionNotFoundError:
         flash('Question not found', 'error')
-        return redirect(url_for('quizzes.list_quizzes'))
+        return redirect(url_for('quizzes.list'))
     except QuizNotFoundError:
         flash('Quiz not found', 'error')
-        return redirect(url_for('quizzes.list_quizzes'))
+        return redirect(url_for('quizzes.list'))
 
 @questions_bp.route('/delete/<int:question_id>', methods=['POST'])
 @login_required
@@ -158,10 +158,10 @@ def delete(question_id):
     
     except QuestionNotFoundError:
         flash('Question not found', 'error')
-        return redirect(url_for('quizzes.list_quizzes'))
+        return redirect(url_for('quizzes.list'))
     except QuizNotFoundError:
         flash('Quiz not found', 'error')
-        return redirect(url_for('quizzes.list_quizzes'))
+        return redirect(url_for('quizzes.list'))
 
 # API Endpoints for AJAX
 @questions_bp.route('/api/<int:question_id>')
