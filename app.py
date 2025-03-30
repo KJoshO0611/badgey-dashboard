@@ -277,23 +277,25 @@ def dashboard():
             
             # Get user's quizzes
             cursor.execute("""
-                SELECT q.quiz_id as id, q.quiz_name as name, q.created_at,
+                SELECT q.quiz_id as id, q.quiz_name as name, q.creation_date,
                        COUNT(DISTINCT qu.question_id) as question_count,
                        COUNT(DISTINCT us.id) as completion_count
                 FROM quizzes q
                 LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
                 LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
                 WHERE q.creator_id = %s
-                GROUP BY q.quiz_id, q.quiz_name, q.created_at
-                ORDER BY q.created_at DESC
+                GROUP BY q.quiz_id, q.quiz_name, q.creation_date
+                ORDER BY q.creation_date DESC
                 LIMIT 5
             """, (current_user.discord_id,))
             user_quizzes = cursor.fetchall()
             
-            # Format created_at dates
+            # Format creation_date dates
             for quiz in user_quizzes:
-                if 'created_at' in quiz and quiz['created_at']:
-                    quiz['created_at'] = quiz['created_at'].strftime('%Y-%m-%d')
+                if 'creation_date' in quiz and quiz['creation_date']:
+                    quiz['created_at'] = quiz['creation_date'].strftime('%Y-%m-%d')
+                else:
+                    quiz['created_at'] = 'N/A'
     except Exception as e:
         logger.error(f"Error fetching dashboard data: {e}")
     

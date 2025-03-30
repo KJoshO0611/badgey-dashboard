@@ -145,7 +145,13 @@
                                     <small>{{ quiz.question_count }} questions</small>
                                 </div>
                                 <div class="d-flex w-100 justify-content-between">
-                                    <p class="mb-1 text-muted">Created {{ quiz.created_at }}</p>
+                                    <p class="mb-1 text-muted">
+                                        {% if quiz.created_at %}
+                                            Created {{ quiz.created_at }}
+                                        {% else %}
+                                            Created date not available
+                                        {% endif %}
+                                    </p>
                                     <small>{{ quiz.completion_count }} completions</small>
                                 </div>
                             </a>
