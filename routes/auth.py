@@ -2,6 +2,8 @@ import os
 import logging
 import requests
 import json
+import time
+import random
 from flask import Blueprint, request, redirect, url_for, session, flash, render_template, current_app, make_response
 from flask_login import login_user, logout_user, login_required, current_user
 from requests_oauthlib import OAuth2Session
@@ -20,6 +22,10 @@ auth_bp = Blueprint('auth', __name__)
 DISCORD_API_BASE_URL = 'https://discord.com/api/v10'
 DISCORD_AUTHORIZATION_BASE_URL = f'{DISCORD_API_BASE_URL}/oauth2/authorize'
 DISCORD_TOKEN_URL = f'{DISCORD_API_BASE_URL}/oauth2/token'
+
+# Cache to store token exchange attempts to prevent overloading Discord API
+TOKEN_EXCHANGE_CACHE = {}
+MAX_RETRIES = 3
 
 def token_updater(token):
     """Update the session with the new token."""
@@ -46,6 +52,46 @@ def make_discord_session(token=None, state=None, scope=None):
         scope=scope,
         state=state
     )
+
+def make_api_request_with_backoff(url, method='get', data=None, headers=None, max_retries=MAX_RETRIES):
+    """Make API requests with exponential backoff for rate limiting."""
+    retry_count = 0
+    base_delay = 2  # Initial delay in seconds
+    
+    while retry_count < max_retries:
+        try:
+            if method.lower() == 'post':
+                response = requests.post(url, data=data, headers=headers)
+            else:
+                response = requests.get(url, headers=headers)
+            
+            # If successful or not a rate limit issue, return immediately
+            if response.status_code != 429:
+                return response
+            
+            # Handle rate limiting
+            logger.warning(f"Rate limited by Discord API: {response.status_code} - {response.text}")
+            
+            # Check for Retry-After header
+            retry_after = response.headers.get('Retry-After')
+            if retry_after:
+                # Discord provides retry-after in seconds
+                wait_time = int(retry_after)
+            else:
+                # Exponential backoff with jitter
+                wait_time = (base_delay ** retry_count) + random.uniform(0, 1)
+            
+            logger.info(f"Waiting {wait_time} seconds before retrying (attempt {retry_count + 1}/{max_retries})")
+            time.sleep(wait_time)
+            retry_count += 1
+            
+        except Exception as e:
+            logger.error(f"Error making request to {url}: {str(e)}")
+            retry_count += 1
+            time.sleep(base_delay ** retry_count)
+    
+    # If we exhausted all retries, return the last response or raise exception
+    return response
 
 @auth_bp.route('/login')
 def login():
@@ -120,46 +166,67 @@ def auth_callback():
         flash("Authentication error: No authorization code received", 'danger') 
         return redirect(url_for('auth.login'))
     
-    # Exchange authorization code for access token
-    try:
-        # Manually exchange the code for a token
-        redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
-        token_data = {
-            'client_id': current_app.config['DISCORD_CLIENT_ID'],
-            'client_secret': current_app.config['DISCORD_CLIENT_SECRET'],
-            'grant_type': 'authorization_code',
-            'code': code,
-            'redirect_uri': redirect_uri,
-            'scope': 'identify email'
-        }
-        
-        logger.info(f"Exchanging code for token with redirect URI: {redirect_uri}")
-        
-        token_response = requests.post(DISCORD_TOKEN_URL, data=token_data)
-        if token_response.status_code != 200:
-            logger.error(f"Token exchange failed: {token_response.status_code} - {token_response.text}")
-            flash("Failed to authenticate with Discord. Please try again.", 'danger')
-            return redirect(url_for('auth.login'))
-            
-        token = token_response.json()
+    # Check for cached token to avoid rate limiting
+    if code in TOKEN_EXCHANGE_CACHE and TOKEN_EXCHANGE_CACHE[code].get('timestamp', 0) > time.time() - 300:
+        logger.info("Using cached token response")
+        token = TOKEN_EXCHANGE_CACHE[code]['token']
         session['oauth2_token'] = token
-        
-        logger.info(f"Successfully exchanged code for token")
-    except Exception as e:
-        logger.error(f"Error exchanging code for token: {str(e)}")
-        flash("An error occurred during login. Please try again.", 'danger')
-        return redirect(url_for('auth.login'))
+    else:
+        # Exchange authorization code for access token with rate limiting handling
+        try:
+            # Manually exchange the code for a token
+            redirect_uri = current_app.config['DISCORD_REDIRECT_URI']
+            token_data = {
+                'client_id': current_app.config['DISCORD_CLIENT_ID'],
+                'client_secret': current_app.config['DISCORD_CLIENT_SECRET'],
+                'grant_type': 'authorization_code',
+                'code': code,
+                'redirect_uri': redirect_uri,
+                'scope': 'identify email'
+            }
+            
+            logger.info(f"Exchanging code for token with redirect URI: {redirect_uri}")
+            
+            # Use the backoff function for token exchange
+            token_response = make_api_request_with_backoff(
+                DISCORD_TOKEN_URL, 
+                method='post', 
+                data=token_data
+            )
+            
+            if token_response.status_code != 200:
+                logger.error(f"Token exchange failed after retries: {token_response.status_code} - {token_response.text}")
+                flash("Failed to authenticate with Discord. Please try again later.", 'danger')
+                return redirect(url_for('auth.login'))
+                
+            token = token_response.json()
+            session['oauth2_token'] = token
+            
+            # Cache the token to avoid future rate limiting
+            TOKEN_EXCHANGE_CACHE[code] = {
+                'token': token,
+                'timestamp': time.time()
+            }
+            
+            logger.info(f"Successfully exchanged code for token")
+        except Exception as e:
+            logger.error(f"Error exchanging code for token: {str(e)}")
+            flash("An error occurred during login. Please try again later.", 'danger')
+            return redirect(url_for('auth.login'))
     
-    # Get the user info from Discord using the access token
+    # Get the user info from Discord using the access token with rate limiting handling
     try:
         headers = {
             'Authorization': f"Bearer {token['access_token']}"
         }
-        user_response = requests.get(f'{DISCORD_API_BASE_URL}/users/@me', headers=headers)
+        user_response = make_api_request_with_backoff(
+            f'{DISCORD_API_BASE_URL}/users/@me', 
+            headers=headers
+        )
         
         if user_response.status_code != 200:
-            logger.error(f"Failed to get user info: {user_response.status_code} - {user_response.text}")
-            flash("Failed to get user information from Discord.", 'danger')
+            logger.error(f"Failed to get user info after retries: {user_response.status_code} - {user_response.text}")
+            flash("Failed to get user information from Discord. Please try again later.", 'danger')
             return redirect(url_for('auth.login'))
             
         user_data = user_response.json()
