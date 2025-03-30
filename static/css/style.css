@@ -15,10 +15,21 @@
     --background-color: #F8F9FA;
 }
 
+/* Sticky Footer Setup */
+html {
+    position: relative;
+    min-height: 100%;
+}
+
 body {
     background-color: var(--background-color);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: var(--dark-color);
+    min-height: 100vh;
+}
+
+main {
+    padding-bottom: 2rem;
 }
 
 /* Custom Bootstrap Overrides */
@@ -192,11 +203,15 @@ body {
 .text-truncate-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
+    box-orient: vertical;
     overflow: hidden;
 }
 
 /* Footer Styles */
-footer {
-    margin-top: auto;
+.footer {
+    width: 100%;
+    background-color: var(--light-color);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
 } 

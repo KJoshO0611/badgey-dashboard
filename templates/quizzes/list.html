@@ -7,7 +7,7 @@
     <h1 class="h2">My Quizzes</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+            {% if current_user.has_role('quiz_creator') or current_user.has_role('admin') %}
                 <a href="{{ url_for('quizzes.create') }}" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-plus me-1"></i>Create Quiz
                 </a>
@@ -39,24 +39,24 @@
                     </thead>
                     <tbody>
                         {% for quiz in quizzes %}
-                            <tr>
-                                <td>{{ quiz.quiz_name }}</td>
-                                <td>{{ quiz.creator_name }}</td>
-                                <td>{{ quiz.question_count }}</td>
+                            <tr class="quiz-row">
+                                <td>{{ quiz.name }}</td>
+                                <td>{{ quiz.creator_id }}</td>
+                                <td>{{ quiz.question_count or 0 }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-primary">
+                                        <a href="{{ url_for('quizzes.view', quiz_id=quiz.id) }}" class="btn btn-outline-primary">
                                             <i class="fas fa-eye"></i> View
                                         </a>
                                         {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
-                                            <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-secondary">
+                                            <a href="{{ url_for('quizzes.edit', quiz_id=quiz.id) }}" class="btn btn-outline-secondary">
                                                 <i class="fas fa-edit"></i> Edit
                                             </a>
                                             <button type="button" class="btn btn-outline-danger" 
                                                     data-bs-toggle="modal" 
                                                     data-bs-target="#deleteQuizModal" 
-                                                    data-quiz-id="{{ quiz.quiz_id }}" 
-                                                    data-quiz-name="{{ quiz.quiz_name }}">
+                                                    data-quiz-id="{{ quiz.id }}" 
+                                                    data-quiz-name="{{ quiz.name }}">
                                                 <i class="fas fa-trash"></i> Delete
                                             </button>
                                         {% endif %}
@@ -75,7 +75,7 @@
                 <i class="fas fa-folder-open fa-4x mb-3 text-muted"></i>
                 <h5>No quizzes found</h5>
                 <p class="text-muted">You haven't created any quizzes yet.</p>
-                {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+                {% if current_user.has_role('quiz_creator') or current_user.has_role('admin') %}
                     <a href="{{ url_for('quizzes.create') }}" class="btn btn-primary mt-3">
                         <i class="fas fa-plus me-1"></i>Create Your First Quiz
                     </a>

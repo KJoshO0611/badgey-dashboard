@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-100">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="d-flex flex-column h-100">
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
@@ -39,14 +39,14 @@
                                 <i class="fas fa-list-alt me-1"></i>Quizzes
                             </a>
                         </li>
-                        {% if current_user.has_role('analytics_viewer') or current_user.is_admin %}
+                        {% if current_user.has_role('analytics_viewer') or current_user.has_role('admin') %}
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('analytics.index') }}">
-                                    <i class="fas fa-chart-line me-1"></i>Analytics
+                                    <i class="fas fa-chart-bar me-1"></i>Analytics
                                 </a>
                             </li>
                         {% endif %}
-                        {% if current_user.is_admin %}
+                        {% if current_user.has_role('admin') %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-cog me-1"></i>Admin
@@ -119,14 +119,14 @@
     </div>
 
     <!-- Main Content -->
-    <main class="container mt-4">
+    <main class="container mt-4 flex-shrink-0">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="mt-5 py-4 bg-light">
+    <footer class="footer mt-auto py-4 bg-light">
         <div class="container text-center">
-            <p>&copy; 2025 Badgey Quiz Dashboard. All rights reserved.</p>
+            <p class="mb-0">&copy; 2025 Badgey Quiz Dashboard. All rights reserved.</p>
         </div>
     </footer>
 

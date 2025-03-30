@@ -1,17 +1,17 @@
 {% extends 'layout.html' %}
 
-{% block title %}Preview: {{ quiz.quiz_name }} - Badgey Quiz Dashboard{% endblock %}
+{% block title %}Preview: {{ quiz.name }} - Badgey Quiz Dashboard{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Preview: {{ quiz.quiz_name }}</h1>
+    <h1 class="h2">Preview: {{ quiz.name }}</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-sm btn-outline-secondary">
+            <a href="{{ url_for('quizzes.view', quiz_id=quiz.id) }}" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-arrow-left me-1"></i>Back to Quiz
             </a>
             {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
-                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}" class="btn btn-sm btn-outline-primary">
+                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-edit me-1"></i>Edit Quiz
                 </a>
             {% endif %}
@@ -40,7 +40,7 @@
     <div id="quizContainer">
         <div class="card mb-4" id="quizIntro">
             <div class="card-body text-center py-5">
-                <h3>{{ quiz.quiz_name }}</h3>
+                <h3>{{ quiz.name }}</h3>
                 <p class="lead mb-4">This quiz contains {{ questions|length }} questions.</p>
                 <button id="startQuizBtn" class="btn btn-lg btn-primary">Start Quiz</button>
             </div>
@@ -61,7 +61,7 @@
                             <span>{{ question.score }} points</span>
                         </div>
                         <div class="card-body">
-                            <h5 class="card-title mb-4">{{ question.question }}</h5>
+                            <h5 class="card-title mb-4">{{ question.text }}</h5>
                             
                             <div class="options-container">
                                 {% for option in question.options %}
@@ -117,7 +117,7 @@
                         
                         <div class="mt-4">
                             <button id="restartQuizBtn" class="btn btn-primary me-2">Restart Quiz</button>
-                            <a href="{{ url_for('quizzes.view', quiz_id=quiz.quiz_id) }}" class="btn btn-outline-secondary">Back to Quiz</a>
+                            <a href="{{ url_for('quizzes.view', quiz_id=quiz.id) }}" class="btn btn-outline-secondary">Back to Quiz</a>
                         </div>
                     </div>
                 </div>
@@ -131,7 +131,7 @@
             <h3>No Questions Available</h3>
             <p class="lead">This quiz doesn't have any questions yet.</p>
             {% if current_user.discord_id == quiz.creator_id or current_user.has_role('admin') %}
-                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.quiz_id) }}#add-question" class="btn btn-primary mt-3">
+                <a href="{{ url_for('quizzes.edit', quiz_id=quiz.id) }}#add-question" class="btn btn-primary mt-3">
                     <i class="fas fa-plus me-1"></i>Add Questions
                 </a>
             {% endif %}

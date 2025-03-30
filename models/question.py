@@ -1,6 +1,6 @@
 import mysql.connector
 import json
-from db_utils import get_db_connection
+from models.db import get_db
 
 class QuestionNotFoundError(Exception):
     """Exception raised when a question is not found"""
@@ -33,149 +33,144 @@ class Question:
     @staticmethod
     def get_by_id(question_id):
         """Get question by ID"""
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
+        conn = get_db()
         try:
-            cursor.execute("SELECT * FROM questions WHERE question_id = %s", (question_id,))
-            q = cursor.fetchone()
-            
-            if not q:
-                raise QuestionNotFoundError(f"Question with ID {question_id} not found")
-            
-            # Parse options from JSON
-            options = json.loads(q.get('options', '{}'))
-            
-            return Question(
-                id=q['question_id'],
-                quiz_id=q['quiz_id'],
-                text=q['question_text'],
-                options=options,
-                correct_answer=q['correct_answer'],
-                score=q['score'],
-                explanation=q.get('explanation')
-            )
-        finally:
-            cursor.close()
-            conn.close()
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM questions WHERE question_id = %s", (question_id,))
+                q = cursor.fetchone()
+                
+                if not q:
+                    raise QuestionNotFoundError(f"Question with ID {question_id} not found")
+                
+                # Parse options from JSON
+                options = q.get('options', '[]')
+                if isinstance(options, str):
+                    options = options.split('|')
+                
+                return Question(
+                    id=q['question_id'],
+                    quiz_id=q['quiz_id'],
+                    text=q['question'],
+                    options=options,
+                    correct_answer=q['correct_answer'],
+                    score=q['score'],
+                    explanation=q.get('explanation')
+                )
+        except Exception as e:
+            if isinstance(e, QuestionNotFoundError):
+                raise e
+            print(f"Error getting question: {e}")
+            raise e
     
     @staticmethod
     def create(quiz_id, text, options, correct_answer, score=10, explanation=None):
         """Create a new question"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
+        conn = get_db()
         try:
-            # Ensure options is in JSON format
-            if isinstance(options, dict):
-                options_json = json.dumps(options)
-            else:
-                options_json = options
-            
-            query = """
-            INSERT INTO questions 
-            (quiz_id, question_text, options, correct_answer, score, explanation) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (quiz_id, text, options_json, correct_answer, score, explanation))
-            conn.commit()
-            
-            # Get the inserted ID
-            question_id = cursor.lastrowid
-            
-            return Question(
-                id=question_id,
-                quiz_id=quiz_id,
-                text=text,
-                options=options,
-                correct_answer=correct_answer,
-                score=score,
-                explanation=explanation
-            )
+            with conn.cursor() as cursor:
+                # Ensure options is in the expected format
+                if isinstance(options, list):
+                    options_str = '|'.join(options)
+                elif isinstance(options, str):
+                    options_str = options
+                else:
+                    options_str = ''
+                
+                query = """
+                INSERT INTO questions 
+                (quiz_id, question, options, correct_answer, score, explanation) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(query, (quiz_id, text, options_str, correct_answer, score, explanation))
+                conn.commit()
+                
+                # Get the inserted ID
+                question_id = cursor.lastrowid
+                
+                return Question(
+                    id=question_id,
+                    quiz_id=quiz_id,
+                    text=text,
+                    options=options,
+                    correct_answer=correct_answer,
+                    score=score,
+                    explanation=explanation
+                )
         except Exception as e:
             print(f"Error creating question: {e}")
             return None
-        finally:
-            cursor.close()
-            conn.close()
     
     def update(self, text=None, options=None, correct_answer=None, score=None, explanation=None):
         """Update question details"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
+        conn = get_db()
         try:
-            # Build query dynamically based on provided parameters
-            update_parts = []
-            params = []
-            
-            if text is not None:
-                update_parts.append("question_text = %s")
-                params.append(text)
-                self.text = text
-            
-            if options is not None:
-                # Ensure options is in JSON format
-                if isinstance(options, dict):
-                    options_json = json.dumps(options)
-                else:
-                    options_json = options
+            with conn.cursor() as cursor:
+                # Build query dynamically based on provided parameters
+                update_parts = []
+                params = []
                 
-                update_parts.append("options = %s")
-                params.append(options_json)
-                self.options = options if isinstance(options, dict) else json.loads(options)
-            
-            if correct_answer is not None:
-                update_parts.append("correct_answer = %s")
-                params.append(correct_answer)
-                self.correct_answer = correct_answer
-            
-            if score is not None:
-                update_parts.append("score = %s")
-                params.append(score)
-                self.score = score
-            
-            if explanation is not None:
-                update_parts.append("explanation = %s")
-                params.append(explanation)
-                self.explanation = explanation
-            
-            if not update_parts:
-                # Nothing to update
+                if text is not None:
+                    update_parts.append("question = %s")
+                    params.append(text)
+                    self.text = text
+                
+                if options is not None:
+                    # Ensure options is in the expected format
+                    if isinstance(options, list):
+                        options_str = '|'.join(options)
+                    elif isinstance(options, str):
+                        options_str = options
+                    else:
+                        options_str = ''
+                    
+                    update_parts.append("options = %s")
+                    params.append(options_str)
+                    self.options = options
+                
+                if correct_answer is not None:
+                    update_parts.append("correct_answer = %s")
+                    params.append(correct_answer)
+                    self.correct_answer = correct_answer
+                
+                if score is not None:
+                    update_parts.append("score = %s")
+                    params.append(score)
+                    self.score = score
+                
+                if explanation is not None:
+                    update_parts.append("explanation = %s")
+                    params.append(explanation)
+                    self.explanation = explanation
+                
+                if not update_parts:
+                    # Nothing to update
+                    return True
+                
+                # Add question_id parameter
+                params.append(self.id)
+                
+                query = f"UPDATE questions SET {', '.join(update_parts)} WHERE question_id = %s"
+                cursor.execute(query, params)
+                conn.commit()
+                
                 return True
-            
-            # Add question_id parameter
-            params.append(self.id)
-            
-            query = f"UPDATE questions SET {', '.join(update_parts)} WHERE question_id = %s"
-            cursor.execute(query, params)
-            conn.commit()
-            
-            return True
         except Exception as e:
             print(f"Error updating question: {e}")
             return False
-        finally:
-            cursor.close()
-            conn.close()
     
     def delete(self):
         """Delete the question"""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
+        conn = get_db()
         try:
-            query = "DELETE FROM questions WHERE question_id = %s"
-            cursor.execute(query, (self.id,))
-            conn.commit()
-            
-            return True
+            with conn.cursor() as cursor:
+                query = "DELETE FROM questions WHERE question_id = %s"
+                cursor.execute(query, (self.id,))
+                conn.commit()
+                
+                return True
         except Exception as e:
             print(f"Error deleting question: {e}")
             return False
-        finally:
-            cursor.close()
-            conn.close()
     
     @staticmethod
     def get_option_text(question_id, option_key):

@@ -324,8 +324,18 @@ def create_admin():
                 cursor = conn.cursor()
                 
                 try:
-                    query = "UPDATE dashboard_users SET is_admin = 1 WHERE discord_id = %s"
+                    # Get existing user's roles
+                    query = "SELECT roles FROM dashboard_users WHERE discord_id = %s"
                     cursor.execute(query, (discord_id,))
+                    user_data = cursor.fetchone()
+                    
+                    current_roles = json.loads(user_data['roles']) if user_data and user_data['roles'] else []
+                    if 'admin' not in current_roles:
+                        current_roles.append('admin')
+                    
+                    # Update user roles to include admin
+                    query = "UPDATE dashboard_users SET roles = %s WHERE discord_id = %s"
+                    cursor.execute(query, (json.dumps(current_roles), discord_id))
                     conn.commit()
                     
                     flash(f'User {username} updated to admin successfully', 'success')
@@ -337,13 +347,21 @@ def create_admin():
                     conn.close()
             else:
                 # Create new admin user
-                user = User.create(discord_id, username, email, roles=['admin'], is_admin=True)
-                
-                if user:
-                    flash(f'Admin user {username} created successfully', 'success')
-                    return redirect(url_for('admin.users'))
-                else:
-                    flash('Failed to create admin user', 'error')
+                try:
+                    user = User.create_or_update(
+                        discord_id=discord_id, 
+                        username=username, 
+                        email=email, 
+                        roles=['admin']
+                    )
+                    
+                    if user:
+                        flash(f'Admin user {username} created successfully', 'success')
+                        return redirect(url_for('admin.users'))
+                    else:
+                        flash('Failed to create admin user', 'error')
+                except Exception as e:
+                    flash(f'Error creating admin user: {e}', 'error')
     
     return render_template('admin/create_admin.html')
 
@@ -356,13 +374,15 @@ def api_user_roles():
     cursor = conn.cursor(dictionary=True)
     
     try:
-        query = "SELECT id, discord_id, username, roles, is_admin FROM dashboard_users"
+        query = "SELECT id, discord_id, username, roles FROM dashboard_users"
         cursor.execute(query)
         users = cursor.fetchall()
         
         # Parse roles from JSON
         for user in users:
             user['roles'] = json.loads(user.get('roles', '[]'))
+            # Add an is_admin property for the UI to use
+            user['is_admin'] = 'admin' in user['roles']
         
         return jsonify(users)
     finally:

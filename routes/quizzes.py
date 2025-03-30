@@ -15,33 +15,20 @@ quizzes_bp = Blueprint('quizzes', __name__, url_prefix='/quizzes')
 def list():
     """List all quizzes for the current user."""
     try:
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # Get quizzes created by the user or all quizzes for admins
-            if current_user.has_role('admin'):
-                cursor.execute("""
-                    SELECT q.quiz_id, q.quiz_name, q.creator_id, u.username as creator_name, 
-                           COUNT(qu.question_id) as question_count
-                    FROM quizzes q
-                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                    LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                    GROUP BY q.quiz_id
-                    ORDER BY q.quiz_id DESC
-                """)
-            else:
-                cursor.execute("""
-                    SELECT q.quiz_id, q.quiz_name, q.creator_id, u.username as creator_name, 
-                           COUNT(qu.question_id) as question_count
-                    FROM quizzes q
-                    LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                    LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                    WHERE q.creator_id = %s
-                    GROUP BY q.quiz_id
-                    ORDER BY q.quiz_id DESC
-                """, (current_user.discord_id,))
-                
-            quizzes = cursor.fetchall()
-            
+        logger.info("Fetching quizzes for list view")
+        
+        # Get quizzes based on user role
+        if current_user.has_role('admin'):
+            logger.info("Admin user: fetching all quizzes")
+            quizzes = Quiz.get_all()
+        else:
+            logger.info(f"Regular user: fetching quizzes for user {current_user.discord_id}")
+            quizzes = Quiz.get_by_creator(current_user.discord_id)
+        
+        # Add question counts to each quiz
+        for quiz in quizzes:
+            quiz.question_count = quiz.get_question_count()
+        
         return render_template('quizzes/list.html', quizzes=quizzes)
     except Exception as e:
         logger.error(f"Error listing quizzes: {e}")
@@ -60,30 +47,14 @@ def create():
             return render_template('quizzes/create.html')
             
         try:
-            conn = get_db()
-            with conn.cursor() as cursor:
-                # Check if a quiz with this name already exists
-                cursor.execute(
-                    "SELECT quiz_id FROM quizzes WHERE quiz_name = %s AND creator_id = %s",
-                    (quiz_name, current_user.discord_id)
-                )
-                if cursor.fetchone():
-                    flash("A quiz with this name already exists.", "warning")
-                    return render_template('quizzes/create.html')
-                    
-                # Insert the new quiz
-                cursor.execute(
-                    "INSERT INTO quizzes (quiz_name, creator_id) VALUES (%s, %s)",
-                    (quiz_name, current_user.discord_id)
-                )
-                quiz_id = cursor.lastrowid
-                conn.commit()
-                
-                flash(f"Quiz '{quiz_name}' created successfully!", "success")
-                return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+            # Create quiz using the Quiz model
+            logger.info(f"Creating new quiz '{quiz_name}' for user {current_user.discord_id}")
+            quiz = Quiz.create(quiz_name, current_user.discord_id)
+            
+            flash(f"Quiz '{quiz_name}' created successfully!", "success")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz.id))
         except Exception as e:
             logger.error(f"Error creating quiz: {e}")
-            conn.rollback()
             flash("An error occurred while creating the quiz.", "danger")
             
     return render_template('quizzes/create.html')
@@ -93,43 +64,25 @@ def create():
 def view(quiz_id):
     """View a specific quiz."""
     try:
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # Get quiz details
-            cursor.execute("""
-                SELECT q.*, u.username as creator_name
-                FROM quizzes q
-                LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                WHERE q.quiz_id = %s
-            """, (quiz_id,))
-            quiz = cursor.fetchone()
+        # Fetch the quiz directly with Quiz model
+        try:
+            logger.info(f"Fetching quiz with ID {quiz_id} for viewing")
+            quiz = Quiz.get_by_id(quiz_id)
             
-            if not quiz:
-                flash("Quiz not found.", "danger")
-                return redirect(url_for('quizzes.list'))
-                
             # Check if user has permission to view this quiz
-            if not current_user.has_role('admin') and quiz['creator_id'] != current_user.discord_id:
+            if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+                logger.warning(f"User {current_user.discord_id} attempted to view quiz {quiz_id} without permission")
                 flash("You don't have permission to view this quiz.", "danger")
                 return redirect(url_for('quizzes.list'))
-                
-            # Get quiz questions
-            cursor.execute("""
-                SELECT question_id, question, options, correct_answer, explanation, score
-                FROM questions
-                WHERE quiz_id = %s
-                ORDER BY question_id
-            """, (quiz_id,))
-            questions = cursor.fetchall()
             
-            # Process options from string to list
-            for q in questions:
-                if q['options']:
-                    q['options'] = q['options'].split('|')
-                else:
-                    q['options'] = []
-                    
-        return render_template('quizzes/view.html', quiz=quiz, questions=questions)
+            logger.info(f"Fetching questions for quiz {quiz_id}")
+            questions = quiz.get_questions()
+            
+            return render_template('quizzes/view.html', quiz=quiz, questions=questions)
+        except Exception as e:
+            logger.error(f"Error viewing quiz with model approach: {e}")
+            # Fallback to direct database query
+            raise e
     except Exception as e:
         logger.error(f"Error viewing quiz: {e}")
         flash("An error occurred while retrieving the quiz.", "danger")
@@ -140,23 +93,14 @@ def view(quiz_id):
 def edit(quiz_id):
     """Edit a specific quiz."""
     try:
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # Get quiz details
-            cursor.execute("""
-                SELECT q.*, u.username as creator_name
-                FROM quizzes q
-                LEFT JOIN dashboard_users u ON q.creator_id = u.discord_id
-                WHERE q.quiz_id = %s
-            """, (quiz_id,))
-            quiz = cursor.fetchone()
+        # Fetch the quiz directly with Quiz model
+        try:
+            logger.info(f"Fetching quiz with ID {quiz_id} for editing")
+            quiz = Quiz.get_by_id(quiz_id)
             
-            if not quiz:
-                flash("Quiz not found.", "danger")
-                return redirect(url_for('quizzes.list'))
-                
             # Check if user has permission to edit this quiz
-            if not current_user.has_role('admin') and quiz['creator_id'] != current_user.discord_id:
+            if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+                logger.warning(f"User {current_user.discord_id} attempted to edit quiz {quiz_id} without permission")
                 flash("You don't have permission to edit this quiz.", "danger")
                 return redirect(url_for('quizzes.list'))
             
@@ -167,31 +111,19 @@ def edit(quiz_id):
                     flash("Quiz name is required.", "danger")
                 else:
                     # Update quiz name
-                    cursor.execute(
-                        "UPDATE quizzes SET quiz_name = %s WHERE quiz_id = %s",
-                        (quiz_name, quiz_id)
-                    )
-                    conn.commit()
+                    logger.info(f"Updating quiz {quiz_id} name to {quiz_name}")
+                    quiz.update(quiz_name)
                     flash("Quiz updated successfully!", "success")
                     return redirect(url_for('quizzes.view', quiz_id=quiz_id))
-                    
-            # Get quiz questions
-            cursor.execute("""
-                SELECT question_id, question, options, correct_answer, explanation, score
-                FROM questions
-                WHERE quiz_id = %s
-                ORDER BY question_id
-            """, (quiz_id,))
-            questions = cursor.fetchall()
             
-            # Process options from string to list
-            for q in questions:
-                if q['options']:
-                    q['options'] = q['options'].split('|')
-                else:
-                    q['options'] = []
-                    
-        return render_template('quizzes/edit.html', quiz=quiz, questions=questions)
+            logger.info(f"Fetching questions for quiz {quiz_id}")
+            questions = quiz.get_questions()
+            
+            return render_template('quizzes/edit.html', quiz=quiz, questions=questions)
+        except Exception as e:
+            logger.error(f"Error editing quiz with model approach: {e}")
+            # Fallback to direct database query
+            raise e
     except Exception as e:
         logger.error(f"Error editing quiz: {e}")
         flash("An error occurred while retrieving the quiz.", "danger")
@@ -202,35 +134,27 @@ def edit(quiz_id):
 def delete(quiz_id):
     """Delete a specific quiz."""
     try:
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # Get quiz details
-            cursor.execute(
-                "SELECT creator_id FROM quizzes WHERE quiz_id = %s",
-                (quiz_id,)
-            )
-            quiz = cursor.fetchone()
-            
-            if not quiz:
-                flash("Quiz not found.", "danger")
-                return redirect(url_for('quizzes.list'))
-                
-            # Check if user has permission to delete this quiz
-            if not current_user.has_role('admin') and quiz['creator_id'] != current_user.discord_id:
-                flash("You don't have permission to delete this quiz.", "danger")
-                return redirect(url_for('quizzes.list'))
-                
-            # Delete quiz (cascades to questions)
-            cursor.execute(
-                "DELETE FROM quizzes WHERE quiz_id = %s",
-                (quiz_id,)
-            )
-            conn.commit()
-            flash("Quiz deleted successfully!", "success")
-            
+        logger.info(f"Attempting to delete quiz {quiz_id}")
+        quiz = Quiz.get_by_id(quiz_id)
+        
+        # Check if user has permission to delete this quiz
+        if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+            logger.warning(f"User {current_user.discord_id} attempted to delete quiz {quiz_id} without permission")
+            flash("You don't have permission to delete this quiz.", "danger")
+            return redirect(url_for('quizzes.list'))
+        
+        # Delete the quiz using the model
+        logger.info(f"Deleting quiz {quiz_id}")
+        quiz.delete()
+        flash("Quiz deleted successfully!", "success")
+        
+        return redirect(url_for('quizzes.list'))
+    except QuizNotFoundError:
+        logger.error(f"Quiz with ID {quiz_id} not found for deletion")
+        flash("Quiz not found.", "danger")
         return redirect(url_for('quizzes.list'))
     except Exception as e:
-        logger.error(f"Error deleting quiz: {e}")
+        logger.error(f"Error deleting quiz {quiz_id}: {e}")
         flash("An error occurred while deleting the quiz.", "danger")
         return redirect(url_for('quizzes.list'))
 
@@ -239,13 +163,22 @@ def delete(quiz_id):
 def preview(quiz_id):
     """Preview how the quiz will appear to users"""
     try:
+        # Add detailed logging
+        logger.info(f"Fetching quiz with ID {quiz_id} for preview")
         quiz = Quiz.get_by_id(quiz_id)
+        
+        logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
         return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
     
     except QuizNotFoundError:
+        logger.error(f"Quiz with ID {quiz_id} not found")
         flash('Quiz not found', 'error')
+        return redirect(url_for('quizzes.list'))
+    except Exception as e:
+        logger.error(f"Error previewing quiz {quiz_id}: {e}")
+        flash(f"An error occurred while previewing the quiz: {str(e)}", "danger")
         return redirect(url_for('quizzes.list'))
 
 # API Endpoints for AJAX

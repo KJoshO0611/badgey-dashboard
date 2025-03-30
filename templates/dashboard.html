@@ -22,7 +22,7 @@
     <h1 class="h2">Dashboard</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <div class="btn-group me-2">
-            {% if current_user.has_role('quiz_creator') or current_user.is_admin %}
+            {% if current_user.has_role('quiz_creator') or current_user.has_role('admin') %}
                 <a href="{{ url_for('quizzes.create') }}" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-plus me-1"></i>Create Quiz
                 </a>
@@ -164,7 +164,7 @@
     </div>
 </div>
 
-{% if current_user.has_role('analytics_viewer') or current_user.is_admin %}
+{% if current_user.has_role('analytics_viewer') or current_user.has_role('admin') %}
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">

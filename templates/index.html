@@ -61,8 +61,8 @@
                         View detailed analytics on quiz performance, user engagement, and more.
                         Understand how your quizzes are being used and improve them.
                     </p>
-                    <a href="{{ url_for('analytics.index') if current_user.is_authenticated and (current_user.has_role('analytics_viewer') or current_user.is_admin) else url_for('auth.login') }}" class="btn btn-primary">
-                        View Analytics
+                    <a href="{{ url_for('analytics.index') if current_user.is_authenticated and (current_user.has_role('analytics_viewer') or current_user.has_role('admin')) else url_for('auth.login') }}" class="btn btn-primary">
+                        <i class="fas fa-chart-bar me-1"></i>View Analytics
                     </a>
                 </div>
             </div>
@@ -80,8 +80,8 @@
                         Manage user permissions and roles. Assign quiz creators, editors,
                         and analytics viewers to control access to features.
                     </p>
-                    <a href="{{ url_for('admin.users') if current_user.is_authenticated and current_user.is_admin else url_for('auth.login') }}" class="btn btn-primary">
-                        Manage Users
+                    <a href="{{ url_for('admin.users') if current_user.is_authenticated and current_user.has_role('admin') else url_for('auth.login') }}" class="btn btn-primary">
+                        <i class="fas fa-tools me-1"></i>Admin Panel
                     </a>
                 </div>
             </div>

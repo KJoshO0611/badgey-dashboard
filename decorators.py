@@ -17,7 +17,7 @@ def role_required(roles):
                 return redirect(url_for('auth.login'))
             
             # Check if user has any of the required roles or is admin
-            if current_user.is_admin:
+            if current_user.has_role('admin'):
                 return f(*args, **kwargs)
                 
             if isinstance(roles, list):
@@ -41,7 +41,7 @@ def admin_required(f):
             flash('Please log in to access this page', 'error')
             return redirect(url_for('auth.login'))
         
-        if not current_user.is_admin:
+        if not current_user.has_role('admin'):
             flash('Admin privileges required to access this page', 'error')
             return redirect(url_for('index'))
         
