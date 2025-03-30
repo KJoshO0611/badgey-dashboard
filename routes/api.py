@@ -291,14 +291,14 @@ def get_user_stats():
             
             # Get quizzes taken by user
             cursor.execute(
-                "SELECT COUNT(*) as count FROM quiz_scores WHERE user_id = %s",
+                "SELECT COUNT(*) as count FROM user_scores WHERE user_id = %s",
                 (current_user.discord_id,)
             )
             quizzes_taken = cursor.fetchone()['count']
             
             # Get average score
             cursor.execute(
-                "SELECT AVG(score) as avg_score FROM quiz_scores WHERE user_id = %s",
+                "SELECT AVG(score) as avg_score FROM user_scores WHERE user_id = %s",
                 (current_user.discord_id,)
             )
             result = cursor.fetchone()
@@ -307,18 +307,18 @@ def get_user_stats():
             # Get recent activity
             cursor.execute("""
                 SELECT s.*, q.quiz_name
-                FROM quiz_scores s
+                FROM user_scores s
                 JOIN quizzes q ON s.quiz_id = q.quiz_id
                 WHERE s.user_id = %s
-                ORDER BY s.completed_at DESC
+                ORDER BY s.completion_date DESC
                 LIMIT 5
             """, (current_user.discord_id,))
             recent_activity = cursor.fetchall()
             
             # Format dates for JSON serialization
             for activity in recent_activity:
-                if 'completed_at' in activity and activity['completed_at']:
-                    activity['completed_at'] = activity['completed_at'].isoformat()
+                if 'completion_date' in activity and activity['completion_date']:
+                    activity['completion_date'] = activity['completion_date'].isoformat()
                 if 'started_at' in activity and activity['started_at']:
                     activity['started_at'] = activity['started_at'].isoformat()
             
@@ -331,4 +331,31 @@ def get_user_stats():
         })
     except Exception as e:
         logger.error(f"Error getting user stats: {e}")
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/quiz-completions')
+@login_required
+def quiz_completions():
+    """API endpoint for quiz completion data."""
+    try:
+        conn = get_db()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT us.*, q.quiz_name 
+                FROM user_scores us
+                JOIN quizzes q ON us.quiz_id = q.quiz_id
+                WHERE us.user_id = %s
+                ORDER BY us.completion_date DESC
+                LIMIT 10
+            """, (current_user.discord_id,))
+            completions = cursor.fetchall()
+            
+            # Process dates for JSON serialization
+            for item in completions:
+                if 'completion_date' in item and item['completion_date']:
+                    item['completion_date'] = item['completion_date'].isoformat()
+            
+        return jsonify(completions)
+    except Exception as e:
+        logger.error(f"Error retrieving quiz completions: {e}")
+        return jsonify({"error": str(e)}), 500 

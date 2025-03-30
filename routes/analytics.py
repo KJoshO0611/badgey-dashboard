@@ -108,7 +108,7 @@ def api_quiz_completions():
                 SELECT 
                     DATE(completion_date) as date,
                     COUNT(*) as count
-                FROM quiz_scores
+                FROM user_scores
                 WHERE completion_date >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
                 GROUP BY DATE(completion_date)
                 ORDER BY date
