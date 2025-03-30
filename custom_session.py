@@ -81,10 +81,16 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         
     def open_session(self, app, request):
         """Open a session from the request."""
-        sid = request.cookies.get(app.config.get('SESSION_COOKIE_NAME', 'session'))
+        cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
+        sid = request.cookies.get(cookie_name)
+        
+        app.logger.debug(f"Opening session with cookie name: {cookie_name}, sid exists: {sid is not None}")
+        
         if not sid:
             # No session ID, create a new session
-            return self.session_class(sid=self._generate_sid(), permanent=True)
+            new_sid = self._generate_sid()
+            app.logger.debug(f"No session ID found, creating new session: {new_sid}")
+            return self.session_class(sid=new_sid, permanent=True)
         
         if self.use_signer:
             # Sign the session ID if configured
@@ -95,10 +101,16 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 sid = signer.loads(sid)
             except BadSignature:
                 # Invalid signature, create a new session
-                return self.session_class(sid=self._generate_sid(), permanent=True)
+                new_sid = self._generate_sid()
+                app.logger.debug(f"Bad signature, creating new session: {new_sid}")
+                return self.session_class(sid=new_sid, permanent=True)
+            except Exception as e:
+                app.logger.error(f"Error checking session signature: {e}")
+                new_sid = self._generate_sid()
+                return self.session_class(sid=new_sid, permanent=True)
         
         # Remove the prefix from the session ID
-        if self.key_prefix:
+        if self.key_prefix and sid.startswith(self.key_prefix):
             sid = sid[len(self.key_prefix):]
         
         # Look up the session in the database
@@ -113,7 +125,9 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             
             if result is None:
                 # No session found, create a new one
-                return self.session_class(sid=self._generate_sid(), permanent=True)
+                new_sid = self._generate_sid()
+                app.logger.debug(f"Session not found in DB, creating new session: {new_sid}")
+                return self.session_class(sid=new_sid, permanent=True)
                 
             data, expires = result
             
@@ -123,27 +137,41 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 conn = self.db.engine.connect()
                 conn.execute(self.table.delete().where(self.table.c.id == sid))
                 conn.close()
-                return self.session_class(sid=self._generate_sid(), permanent=True)
+                new_sid = self._generate_sid()
+                app.logger.debug(f"Session expired, creating new session: {new_sid}")
+                return self.session_class(sid=new_sid, permanent=True)
                 
             # Load the data
-            data = b64decode(data.encode('utf-8'))
-            session_data = self.serializer.loads(data)
-            return self.session_class(session_data, sid=sid, permanent=True)
+            try:
+                if data:
+                    data = b64decode(data.encode('utf-8'))
+                    session_data = self.serializer.loads(data)
+                    app.logger.debug(f"Successfully loaded session data for sid: {sid}")
+                    return self.session_class(session_data, sid=sid, permanent=True)
+                else:
+                    app.logger.warning(f"Empty session data for sid: {sid}, creating new session")
+                    return self.session_class(sid=sid, permanent=True)
+            except Exception as e:
+                app.logger.error(f"Error deserializing session data: {e}")
+                return self.session_class(sid=sid, permanent=True)
         except Exception as e:
             # Log the error and create a new session
             app.logger.error(f"Error loading session: {e}")
-            return self.session_class(sid=self._generate_sid(), permanent=True)
+            new_sid = self._generate_sid()
+            return self.session_class(sid=new_sid, permanent=True)
     
     def save_session(self, app, session, response):
         """Save the session to the database."""
         domain = self.get_cookie_domain(app)
         path = self.get_cookie_path(app)
+        cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         
         # If the session is empty, delete it
         if not session:
             if session.modified:
                 self._delete_session(session.sid)
-                response.delete_cookie(app.config.get('SESSION_COOKIE_NAME', 'session'), domain=domain, path=path)
+                response.delete_cookie(cookie_name, domain=domain, path=path)
+                app.logger.debug(f"Deleted empty session: {session.sid}")
             return
         
         # Determine when the session should expire
@@ -157,13 +185,24 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         if not sid:
             sid = self._generate_sid()
             session.sid = sid
+            app.logger.debug(f"Generated new session ID: {sid}")
             
         # Get the user ID
-        user_id = current_user.id if current_user.is_authenticated else 1  # Default to guest user ID
+        try:
+            user_id = current_user.id if current_user.is_authenticated else 1  # Default to guest user ID
+        except Exception as e:
+            app.logger.error(f"Error getting user ID for session, using default: {e}")
+            user_id = 1  # Default to guest user ID
         
         # Serialize the session data
-        serialized_data = self.serializer.dumps(dict(session))
-        data = b64encode(serialized_data).decode('utf-8')
+        try:
+            serialized_data = self.serializer.dumps(dict(session))
+            data = b64encode(serialized_data).decode('utf-8')
+            app.logger.debug(f"Serialized session data for sid: {sid}")
+        except Exception as e:
+            app.logger.error(f"Error serializing session data: {e}")
+            # Use an empty string as fallback
+            data = b64encode(self.serializer.dumps({})).decode('utf-8')
         
         # Save the session to the database
         try:
@@ -177,6 +216,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             
             if result is None:
                 # Insert a new session
+                app.logger.debug(f"Inserting new session record for sid: {sid}")
                 conn.execute(
                     self.table.insert().values(
                         id=sid,
@@ -187,6 +227,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 )
             else:
                 # Update the existing session
+                app.logger.debug(f"Updating existing session record for sid: {sid}")
                 conn.execute(
                     self.table.update()
                     .where(self.table.c.id == sid)
@@ -199,29 +240,33 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             
             conn.close()
         except Exception as e:
-            app.logger.error(f"Error saving session: {e}")
+            app.logger.error(f"Error saving session to database: {e}")
             
         # Set the session cookie
-        if self.key_prefix:
-            cookie_sid = self.key_prefix + sid
-        else:
-            cookie_sid = sid
-            
-        if self.use_signer:
-            from itsdangerous.url_safe import URLSafeSerializer
-            signer = URLSafeSerializer(app.secret_key)
-            cookie_sid = signer.dumps(cookie_sid)
-            
-        response.set_cookie(
-            app.config.get('SESSION_COOKIE_NAME', 'session'),
-            cookie_sid,
-            expires=expires,
-            httponly=httponly,
-            domain=domain,
-            path=path,
-            secure=secure,
-            samesite=samesite
-        )
+        try:
+            if self.key_prefix:
+                cookie_sid = self.key_prefix + sid
+            else:
+                cookie_sid = sid
+                
+            if self.use_signer:
+                from itsdangerous.url_safe import URLSafeSerializer
+                signer = URLSafeSerializer(app.secret_key)
+                cookie_sid = signer.dumps(cookie_sid)
+                
+            app.logger.debug(f"Setting session cookie: {cookie_name}={cookie_sid[:10]}...")
+            response.set_cookie(
+                cookie_name,
+                cookie_sid,
+                expires=expires,
+                httponly=httponly,
+                domain=domain,
+                path=path,
+                secure=secure,
+                samesite=samesite
+            )
+        except Exception as e:
+            app.logger.error(f"Error setting session cookie: {e}")
     
     def _generate_sid(self):
         """Generate a unique session ID."""

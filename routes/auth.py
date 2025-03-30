@@ -84,13 +84,22 @@ def auth_callback():
         flash(f"Error: {request.args.get('error')}", 'danger')
         return redirect(url_for('auth.login'))
     
-    if 'state' not in request.args or 'oauth2_state' not in session:
-        logger.error("Missing state parameter in OAuth callback")
-        flash("Authentication error: Missing state parameter", 'warning')
+    # Check for state parameter - with more graceful handling for missing state
+    state_from_request = request.args.get('state')
+    state_from_session = session.get('oauth2_state')
+    
+    if not state_from_request:
+        logger.error("Missing state parameter in request")
+        flash("Authentication error: Missing state parameter in request", 'warning')
         return redirect(url_for('auth.login'))
     
-    if request.args.get('state') != session['oauth2_state']:
-        logger.error("State mismatch in OAuth callback")
+    if not state_from_session:
+        logger.error("Missing oauth2_state in session - session may have been lost or expired")
+        flash("Authentication error: Your session has expired. Please try logging in again.", 'warning')
+        return redirect(url_for('auth.login'))
+    
+    if state_from_request != state_from_session:
+        logger.error(f"State mismatch in OAuth callback: {state_from_request} vs {state_from_session}")
         flash("Authentication error: Invalid state parameter", 'warning')
         return redirect(url_for('auth.login'))
     
