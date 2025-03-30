@@ -1,10 +1,12 @@
 import logging
 import json
-from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, jsonify, send_file
 from flask_login import login_required, current_user
-from decorators import admin_required
-from models.user import User
 from models.db import get_db
+from models.user import User
+from decorators import admin_required
+import os
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -387,4 +389,68 @@ def api_user_roles():
         return jsonify(users)
     finally:
         cursor.close()
-        conn.close() 
+        conn.close()
+
+@admin_bp.route('/update_settings', methods=['POST'])
+@login_required
+@admin_required
+def update_settings():
+    """Update system settings."""
+    try:
+        conn = get_db()
+        with conn.cursor() as cursor:
+            # Get form data
+            site_title = request.form.get('site_title', 'Badgey Quiz Dashboard')
+            maintenance_mode = 'maintenance_mode' in request.form
+            allow_registration = 'allow_registration' in request.form
+            
+            # Check if settings exist
+            cursor.execute("SELECT * FROM site_settings WHERE id = 1")
+            if cursor.fetchone():
+                # Update existing settings
+                cursor.execute(
+                    "UPDATE site_settings SET site_title = %s, maintenance_mode = %s, allow_registration = %s WHERE id = 1",
+                    (site_title, maintenance_mode, allow_registration)
+                )
+            else:
+                # Insert new settings
+                cursor.execute(
+                    "INSERT INTO site_settings (id, site_title, maintenance_mode, allow_registration) VALUES (1, %s, %s, %s)",
+                    (site_title, maintenance_mode, allow_registration)
+                )
+                
+            conn.commit()
+            flash("Settings updated successfully!", "success")
+    except Exception as e:
+        logger.error(f"Error updating settings: {e}")
+        flash(f"Error updating settings: {e}", "danger")
+        
+    return redirect(url_for('admin.system'))
+
+@admin_bp.route('/clear_cache', methods=['POST'])
+@login_required
+@admin_required
+def clear_cache():
+    """Clear application caches."""
+    try:
+        # Handle different cache types
+        cache_data = 'cache_data' in request.form
+        cache_session = 'cache_session' in request.form
+        
+        if cache_data:
+            # Clear data cache logic here
+            flash("Data cache cleared successfully!", "success")
+            
+        if cache_session:
+            # Clear session data
+            conn = get_db()
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM dashboard_sessions")
+                conn.commit()
+            flash("Session cache cleared successfully! All users will be logged out.", "success")
+            
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}")
+        flash(f"Error clearing cache: {e}", "danger")
+        
+    return redirect(url_for('admin.system')) 

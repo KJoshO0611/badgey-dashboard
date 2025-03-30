@@ -58,47 +58,57 @@ class Quiz:
     def get_all():
         """Get all quizzes"""
         conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM quizzes ORDER BY quiz_id DESC")
-            quizzes = cursor.fetchall()
-            
-            result = []
-            for quiz_data in quizzes:
-                created_at = quiz_data.get('created_at')
-                if isinstance(created_at, str):
-                    created_at = datetime.fromisoformat(created_at)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM quizzes ORDER BY quiz_id DESC")
+                quizzes = cursor.fetchall()
                 
-                result.append(Quiz(
-                    id=quiz_data['quiz_id'],
-                    name=quiz_data['quiz_name'],
-                    creator_id=quiz_data['creator_id'],
-                    created_at=created_at
-                ))
-            
-            return result
+                result = []
+                for quiz_data in quizzes:
+                    created_at = quiz_data.get('created_at')
+                    if isinstance(created_at, str):
+                        created_at = datetime.fromisoformat(created_at)
+                    
+                    result.append(Quiz(
+                        id=quiz_data['quiz_id'],
+                        name=quiz_data['quiz_name'],
+                        creator_id=quiz_data['creator_id'],
+                        created_at=created_at
+                    ))
+                
+                return result
+        except Exception as e:
+            print(f"Error getting all quizzes: {e}")
+            # Return empty list on error rather than failing
+            return []
     
     @staticmethod
     def get_by_creator(creator_id):
         """Get quizzes by creator ID"""
         conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM quizzes WHERE creator_id = %s ORDER BY created_at DESC", (creator_id,))
-            quizzes = cursor.fetchall()
-            
-            result = []
-            for quiz_data in quizzes:
-                created_at = quiz_data.get('created_at')
-                if isinstance(created_at, str):
-                    created_at = datetime.fromisoformat(created_at)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM quizzes WHERE creator_id = %s ORDER BY created_at DESC", (creator_id,))
+                quizzes = cursor.fetchall()
                 
-                result.append(Quiz(
-                    id=quiz_data['quiz_id'],
-                    name=quiz_data['quiz_name'],
-                    creator_id=quiz_data['creator_id'],
-                    created_at=created_at
-                ))
-            
-            return result
+                result = []
+                for quiz_data in quizzes:
+                    created_at = quiz_data.get('created_at')
+                    if isinstance(created_at, str):
+                        created_at = datetime.fromisoformat(created_at)
+                    
+                    result.append(Quiz(
+                        id=quiz_data['quiz_id'],
+                        name=quiz_data['quiz_name'],
+                        creator_id=quiz_data['creator_id'],
+                        created_at=created_at
+                    ))
+                
+                return result
+        except Exception as e:
+            print(f"Error getting quizzes by creator: {e}")
+            # Return empty list on error rather than failing
+            return []
     
     @staticmethod
     def create(name, creator_id):
@@ -218,26 +228,35 @@ class Quiz:
     def get_question_count(self):
         """Get the number of questions in this quiz"""
         conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM questions WHERE quiz_id = %s", (self.id,))
-            count = cursor.fetchone()[0]
-            
-            return count
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM questions WHERE quiz_id = %s", (self.id,))
+                result = cursor.fetchone()
+                return result['count'] if result else 0
+        except Exception as e:
+            print(f"Error getting question count: {e}")
+            return 0
     
     def get_total_score(self):
         """Get the total possible score for this quiz"""
         conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT SUM(score) FROM questions WHERE quiz_id = %s", (self.id,))
-            total = cursor.fetchone()[0]
-            
-            return total or 0
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT SUM(score) as total FROM questions WHERE quiz_id = %s", (self.id,))
+                result = cursor.fetchone()
+                return result['total'] or 0
+        except Exception as e:
+            print(f"Error getting total score: {e}")
+            return 0
     
     def get_completion_count(self):
         """Get number of times this quiz has been completed"""
         conn = get_db()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM user_scores WHERE quiz_id = %s", (self.id,))
-            count = cursor.fetchone()[0]
-            
-            return count 
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM user_scores WHERE quiz_id = %s", (self.id,))
+                result = cursor.fetchone()
+                return result['count'] if result else 0
+        except Exception as e:
+            print(f"Error getting completion count: {e}")
+            return 0 

@@ -181,6 +181,166 @@ def preview(quiz_id):
         flash(f"An error occurred while previewing the quiz: {str(e)}", "danger")
         return redirect(url_for('quizzes.list'))
 
+@quizzes_bp.route('/<int:quiz_id>/questions/add', methods=['POST'])
+@login_required
+def add_question(quiz_id):
+    """Add a new question to a quiz."""
+    try:
+        logger.info(f"Adding question to quiz {quiz_id}")
+        quiz = Quiz.get_by_id(quiz_id)
+        
+        # Check if user has permission to edit this quiz
+        if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+            logger.warning(f"User {current_user.discord_id} attempted to add question to quiz {quiz_id} without permission")
+            flash("You don't have permission to edit this quiz.", "danger")
+            return redirect(url_for('quizzes.list'))
+        
+        # Extract form data
+        question_text = request.form.get('question')
+        options = []
+        
+        # Get options dynamically
+        i = 0
+        while f'option{i}' in request.form:
+            option = request.form.get(f'option{i}')
+            if option.strip():  # Only add non-empty options
+                options.append(option)
+            i += 1
+        
+        # Get correct answer and score
+        correct_answer = request.form.get('correct_answer', 0)
+        score = request.form.get('score', 10)
+        explanation = request.form.get('explanation', '')
+        
+        # Validate inputs
+        if not question_text:
+            flash("Question text is required.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+            
+        if len(options) < 2:
+            flash("At least two options are required.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+            
+        # Add the question
+        logger.info(f"Creating question for quiz {quiz_id}")
+        quiz.add_question(
+            text=question_text,
+            options=options,
+            correct_answer=int(correct_answer),
+            score=int(score),
+            explanation=explanation
+        )
+        
+        flash("Question added successfully!", "success")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+    except Exception as e:
+        logger.error(f"Error adding question to quiz {quiz_id}: {e}")
+        flash("An error occurred while adding the question.", "danger")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+
+@quizzes_bp.route('/<int:quiz_id>/questions/<int:question_id>/edit', methods=['POST'])
+@login_required
+def edit_question(quiz_id, question_id):
+    """Edit an existing question."""
+    try:
+        logger.info(f"Editing question {question_id} for quiz {quiz_id}")
+        quiz = Quiz.get_by_id(quiz_id)
+        
+        # Check if user has permission to edit this quiz
+        if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+            logger.warning(f"User {current_user.discord_id} attempted to edit quiz {quiz_id} without permission")
+            flash("You don't have permission to edit this quiz.", "danger")
+            return redirect(url_for('quizzes.list'))
+        
+        # Find the question
+        question = None
+        for q in quiz.get_questions():
+            if q.id == question_id:
+                question = q
+                break
+                
+        if not question:
+            flash("Question not found.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        # Extract form data
+        question_text = request.form.get('question')
+        options = []
+        
+        # Get options dynamically - find all option inputs in the form
+        for key in request.form:
+            if key.startswith('option') and key[6:].isdigit():
+                value = request.form.get(key)
+                if value.strip():  # Only add non-empty options
+                    options.append(value)
+        
+        # Get correct answer and score
+        correct_answer = request.form.get('correct_answer', 0)
+        score = request.form.get('score', 10)
+        explanation = request.form.get('explanation', '')
+        
+        # Validate inputs
+        if not question_text:
+            flash("Question text is required.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+            
+        if len(options) < 2:
+            flash("At least two options are required.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        # Update the question
+        logger.info(f"Updating question {question_id} for quiz {quiz_id}")
+        question.update(
+            text=question_text,
+            options=options,
+            correct_answer=int(correct_answer),
+            score=int(score),
+            explanation=explanation
+        )
+        
+        flash("Question updated successfully!", "success")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+    except Exception as e:
+        logger.error(f"Error editing question {question_id} for quiz {quiz_id}: {e}")
+        flash("An error occurred while updating the question.", "danger")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+
+@quizzes_bp.route('/<int:quiz_id>/questions/<int:question_id>/delete', methods=['POST'])
+@login_required
+def delete_question(quiz_id, question_id):
+    """Delete a question from a quiz."""
+    try:
+        logger.info(f"Deleting question {question_id} from quiz {quiz_id}")
+        quiz = Quiz.get_by_id(quiz_id)
+        
+        # Check if user has permission to edit this quiz
+        if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+            logger.warning(f"User {current_user.discord_id} attempted to delete question from quiz {quiz_id} without permission")
+            flash("You don't have permission to edit this quiz.", "danger")
+            return redirect(url_for('quizzes.list'))
+        
+        # Find the question
+        question = None
+        for q in quiz.get_questions():
+            if q.id == question_id:
+                question = q
+                break
+                
+        if not question:
+            flash("Question not found.", "danger")
+            return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+        
+        # Delete the question
+        logger.info(f"Deleting question {question_id} from quiz {quiz_id}")
+        question.delete()
+        
+        flash("Question deleted successfully!", "success")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+    except Exception as e:
+        logger.error(f"Error deleting question {question_id} from quiz {quiz_id}: {e}")
+        flash("An error occurred while deleting the question.", "danger")
+        return redirect(url_for('quizzes.edit', quiz_id=quiz_id))
+
 # API Endpoints for AJAX
 @quizzes_bp.route('/api/list')
 @login_required

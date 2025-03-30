@@ -137,7 +137,7 @@ def api_quiz_completions():
 def get_summary_metrics():
     """Get summary metrics for the dashboard"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         # Total quizzes
@@ -184,6 +184,18 @@ def get_summary_metrics():
             'attempts_today': attempts_today,
             'daily_trend': round(daily_trend, 2)
         }
+    except Exception as e:
+        logger.error(f"Error getting summary metrics: {e}")
+        # Return default values on error
+        return {
+            'total_quizzes': 0,
+            'total_questions': 0,
+            'total_attempts': 0, 
+            'total_users': 0,
+            'avg_score': 0,
+            'attempts_today': 0,
+            'daily_trend': 0
+        }
     finally:
         cursor.close()
         conn.close()
@@ -191,7 +203,7 @@ def get_summary_metrics():
 def get_top_quizzes(limit=10):
     """Get top quizzes by number of attempts"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         query = """
@@ -204,6 +216,9 @@ def get_top_quizzes(limit=10):
         """
         cursor.execute(query, (limit,))
         return cursor.fetchall()
+    except Exception as e:
+        logger.error(f"Error getting top quizzes: {e}")
+        return []
     finally:
         cursor.close()
         conn.close()
@@ -211,7 +226,7 @@ def get_top_quizzes(limit=10):
 def get_recent_activity(limit=10):
     """Get recent quiz activity"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         query = """
@@ -229,6 +244,9 @@ def get_recent_activity(limit=10):
             entry['timestamp'] = entry['timestamp'].isoformat() if entry['timestamp'] else None
         
         return activity
+    except Exception as e:
+        logger.error(f"Error getting recent activity: {e}")
+        return []
     finally:
         cursor.close()
         conn.close()
@@ -236,7 +254,7 @@ def get_recent_activity(limit=10):
 def get_user_stats():
     """Get user statistics"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         # Top users by total score
@@ -271,6 +289,9 @@ def get_user_stats():
             'top_users': top_users,
             'active_hours': hours_data
         }
+    except Exception as e:
+        logger.error(f"Error getting user stats: {e}")
+        return {'top_users': [], 'active_hours': [0] * 24}
     finally:
         cursor.close()
         conn.close()
@@ -278,7 +299,7 @@ def get_user_stats():
 def get_quiz_activity(days=30):
     """Get quiz activity over time"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         # Calculate date range
@@ -316,6 +337,9 @@ def get_quiz_activity(days=30):
             })
         
         return result
+    except Exception as e:
+        logger.error(f"Error getting quiz activity: {e}")
+        return []
     finally:
         cursor.close()
         conn.close()
@@ -323,7 +347,7 @@ def get_quiz_activity(days=30):
 def get_user_activity(days=30):
     """Get user activity over time"""
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
     
     try:
         # Calculate date range
@@ -332,7 +356,7 @@ def get_user_activity(days=30):
         
         # Query unique users by date
         query = """
-        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as unique_users
+        SELECT DATE(timestamp) as date, COUNT(DISTINCT user_id) as count
         FROM user_scores
         WHERE timestamp >= %s AND timestamp < %s
         GROUP BY DATE(timestamp)
@@ -341,21 +365,29 @@ def get_user_activity(days=30):
         cursor.execute(query, (start_date, end_date + timedelta(days=1)))
         activity_data = cursor.fetchall()
         
-        # Convert to dictionary for easier lookup
-        activity_by_date = {entry['date'].isoformat(): entry['unique_users'] for entry in activity_data}
-        
-        # Generate all dates in range
-        result = []
+        # Create a lookup dictionary
+        date_range = []
         current_date = start_date
         while current_date <= end_date:
-            date_str = current_date.isoformat()
-            result.append({
-                'date': date_str,
-                'unique_users': activity_by_date.get(date_str, 0)
-            })
+            date_range.append(current_date)
             current_date += timedelta(days=1)
         
+        # Convert to dictionary for easier lookup
+        activity_by_date = {entry['date'].isoformat(): entry['count'] for entry in activity_data}
+        
+        # Format for chart
+        result = []
+        for date in date_range:
+            date_str = date.isoformat()
+            result.append({
+                'date': date_str,
+                'count': activity_by_date.get(date_str, 0)
+            })
+        
         return result
+    except Exception as e:
+        logger.error(f"Error getting user activity: {e}")
+        return []
     finally:
         cursor.close()
         conn.close() 

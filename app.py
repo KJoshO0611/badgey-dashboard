@@ -5,6 +5,7 @@ from flask_login import LoginManager, current_user, login_required, login_user, 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import click
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -44,6 +45,19 @@ app.config['DISCORD_REDIRECT_URI'] = os.getenv('DISCORD_REDIRECT_URI')
 
 # For handling proxy headers
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# Add Jinja filters
+@app.template_filter('datetime')
+def format_datetime(value, format='%Y-%m-%d %H:%M'):
+    """Format a datetime object."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    return value.strftime(format)
 
 # Initialize login manager
 login_manager = LoginManager()
