@@ -62,63 +62,40 @@ class Question:
             print(f"Error getting question: {e}")
             raise e
     
-    @staticmethod
-    def create(quiz_id, text, options, correct_answer, score=10, explanation=None):
-        """Create a new question"""
+    @classmethod
+    def create(cls, quiz_id, text, options, correct_answer, score=10, explanation=None):
+        """Create a new question for a quiz."""
         conn = get_db()
         try:
             with conn.cursor() as cursor:
-                # Ensure options is properly formatted for the database with lettered keys
-                formatted_options = {}
-                
-                # Convert array to lettered format if needed
-                if isinstance(options, list):
-                    letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-                    for i, option in enumerate(options):
-                        if i < len(letters):
-                            formatted_options[letters[i]] = option
-                # If already a dict with lettered keys, use as is
-                elif isinstance(options, dict):
-                    formatted_options = options
-                # If string, convert to dict (assuming it's already in JSON format)
+                # Ensure options is a JSON string
+                if isinstance(options, dict):
+                    options_json = json.dumps(options)
                 elif isinstance(options, str):
+                    # If it's already a string, make sure it's valid JSON
                     try:
-                        formatted_options = json.loads(options)
+                        json.loads(options)
+                        options_json = options
                     except:
-                        # If not valid JSON, create a single option
-                        formatted_options = {"A": options}
+                        # If not valid JSON, assume it's a string representation that needs conversion
+                        options_json = json.dumps(options)
                 else:
-                    formatted_options = {}
+                    options_json = json.dumps(options)
                 
-                # Convert to JSON string
-                options_json = json.dumps(formatted_options)
-                
-                # Use question_text column instead of question
+                # Create the question
                 cursor.execute(
-                    """
-                    INSERT INTO questions 
-                    (quiz_id, question_text, options, correct_answer, score, explanation) 
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """, 
-                    (quiz_id, text, options_json, correct_answer, score, explanation)
+                    "INSERT INTO questions (quiz_id, question, options, correct_answer, score, explanation) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (quiz_id, text, options_json, str(correct_answer), score, explanation)
                 )
                 conn.commit()
                 
-                # Get the inserted ID
+                # Get the ID of the new question
                 question_id = cursor.lastrowid
                 
-                return Question(
-                    id=question_id,
-                    quiz_id=quiz_id,
-                    text=text,
-                    options=formatted_options,
-                    correct_answer=correct_answer,
-                    score=score,
-                    explanation=explanation
-                )
+                return cls(question_id, quiz_id, text, options, correct_answer, score, explanation)
         except Exception as e:
-            print(f"Error creating question: {e}")
-            return None
+            conn.rollback()
+            raise e
     
     def update(self, text=None, options=None, correct_answer=None, score=None, explanation=None):
         """Update question details"""

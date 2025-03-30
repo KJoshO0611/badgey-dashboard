@@ -267,44 +267,51 @@ document.addEventListener('DOMContentLoaded', function() {
             const incorrectFeedback = questionSlide.querySelector('.incorrect-feedback');
             const explanationBox = questionSlide.querySelector('.explanation-box');
             
-            feedbackContainer.style.display = 'block';
-            
-            const isCorrect = selectedOption.dataset.correct === 'true';
-            
-            // Show correct/incorrect feedback
-            if (isCorrect) {
-                correctFeedback.style.display = 'block';
-                incorrectFeedback.style.display = 'none';
+            // Ensure feedback elements exist before using them
+            if (feedbackContainer) {
+                feedbackContainer.style.display = 'block';
                 
-                // Only count score the first time a question is answered correctly
-                if (!answeredQuestions[questionIndex]) {
-                    correctCount++;
-                    totalScore += parseInt(questionScores[questionIndex]);
+                const isCorrect = selectedOption.dataset.correct === 'true';
+                
+                // Show correct/incorrect feedback
+                if (isCorrect) {
+                    if (correctFeedback) correctFeedback.style.display = 'block';
+                    if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+                    
+                    // Only count score the first time a question is answered correctly
+                    if (!answeredQuestions[questionIndex]) {
+                        correctCount++;
+                        totalScore += parseInt(questionScores[questionIndex]);
+                    }
+                } else {
+                    if (correctFeedback) correctFeedback.style.display = 'none';
+                    if (incorrectFeedback) incorrectFeedback.style.display = 'block';
+                    
+                    // Show which answer was correct
+                    const correctOption = questionSlide.querySelector('input[data-correct="true"]');
+                    if (correctOption) {
+                        // Get the full label text including the option content
+                        const correctAnswerLabel = correctOption.nextElementSibling;
+                        if (correctAnswerLabel) {
+                            const correctAnswerText = correctAnswerLabel.textContent.trim();
+                            const correctAnswerElement = questionSlide.querySelector('.correct-answer-text');
+                            if (correctAnswerElement) {
+                                correctAnswerElement.textContent = correctAnswerText;
+                            }
+                            
+                            // Debug to verify the correct answer is properly identified
+                            console.log('Correct option letter:', correctOption.value);
+                            console.log('Correct option text:', correctAnswerText);
+                        }
+                    }
+                }
+                
+                // Show explanation if available
+                if (explanationBox) {
+                    explanationBox.style.display = 'block';
                 }
             } else {
-                correctFeedback.style.display = 'none';
-                incorrectFeedback.style.display = 'block';
-                
-                // Show which answer was correct
-                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
-                if (correctOption) {
-                    // Get the full label text including the option content
-                    const correctAnswerLabel = correctOption.nextElementSibling;
-                    const correctAnswerText = correctAnswerLabel.textContent.trim();
-                    const correctAnswerElement = questionSlide.querySelector('.correct-answer-text');
-                    if (correctAnswerElement) {
-                        correctAnswerElement.textContent = correctAnswerText;
-                    }
-                    
-                    // Debug to verify the correct answer is properly identified
-                    console.log('Correct option letter:', correctOption.value);
-                    console.log('Correct option text:', correctAnswerText);
-                }
-            }
-            
-            // Show explanation if available
-            if (explanationBox) {
-                explanationBox.style.display = 'block';
+                console.error('Feedback container not found');
             }
             
             // Mark question as answered
@@ -381,17 +388,28 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update result values
         const scorePercent = Math.round((correctCount / totalQuestions) * 100);
-        document.getElementById('scorePercent').textContent = scorePercent;
-        document.getElementById('correctAnswers').textContent = correctCount;
-        document.getElementById('totalScore').textContent = totalScore;
+        
+        const scorePercentElement = document.getElementById('scorePercent');
+        const correctAnswersElement = document.getElementById('correctAnswers');
+        const totalScoreElement = document.getElementById('totalScore');
+        
+        if (scorePercentElement) scorePercentElement.textContent = scorePercent;
+        if (correctAnswersElement) correctAnswersElement.textContent = correctCount;
+        if (totalScoreElement) totalScoreElement.textContent = totalScore;
         
         // Show results slide
-        resultsSlide.style.display = 'block';
+        if (resultsSlide) {
+            resultsSlide.style.display = 'block';
+        } else {
+            console.error('Results slide not found');
+        }
         
         // Update progress to 100%
-        progressBar.style.width = '100%';
-        progressBar.setAttribute('aria-valuenow', 100);
-        progressBar.textContent = '100%';
+        if (progressBar) {
+            progressBar.style.width = '100%';
+            progressBar.setAttribute('aria-valuenow', 100);
+            progressBar.textContent = '100%';
+        }
     }
 });
 </script>
