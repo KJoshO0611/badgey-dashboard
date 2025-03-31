@@ -184,6 +184,11 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 
+# Initialize database
+with app.app_context():
+    init_db()
+    logger.info("Database initialized")
+
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(quizzes_bp)
@@ -324,9 +329,9 @@ def internal_server_error(e):
 
 @app.cli.command('init-db')
 def init_db_command():
-    """Initialize the database tables."""
-    init_db()
-    init_user_table()
+    """Clear the existing data and create new tables."""
+    with app.app_context():
+        init_db()
     click.echo('Initialized the database.')
 
 if __name__ == '__main__':

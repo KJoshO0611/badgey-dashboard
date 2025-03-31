@@ -11,6 +11,7 @@ from flask import request, current_app
 from werkzeug.datastructures import CallbackDict
 from flask_login import current_user
 from uuid import uuid4
+from itsdangerous.url_safe import URLSafeSerializer
 
 class CustomSqlAlchemySession(CallbackDict, SessionMixin):
     """Custom session class that works with our dashboard_sessions table schema."""
@@ -93,14 +94,12 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             return self.session_class(sid=new_sid, permanent=True)
         
         if self.use_signer:
-            # Sign the session ID if configured
             try:
                 from itsdangerous import BadSignature
                 from itsdangerous.url_safe import URLSafeSerializer
                 signer = URLSafeSerializer(app.secret_key)
                 sid = signer.loads(sid)
             except BadSignature:
-                # Invalid signature, create a new session
                 new_sid = self._generate_sid()
                 app.logger.debug(f"Bad signature, creating new session: {new_sid}")
                 return self.session_class(sid=new_sid, permanent=True)
@@ -109,13 +108,31 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 new_sid = self._generate_sid()
                 return self.session_class(sid=new_sid, permanent=True)
         
-        # Remove the prefix from the session ID
-        if self.key_prefix and sid.startswith(self.key_prefix):
-            sid = sid[len(self.key_prefix):]
+        # Try to load existing session data
+        try:
+            conn = self.db.connect()
+            result = conn.execute(
+                sa.select([self.table.c.data])
+                .where(self.table.c.id == sid)
+                .where(self.table.c.expires_at > datetime.utcnow())
+            ).fetchone()
+            
+            if result and result[0]:
+                try:
+                    data = b64decode(result[0])
+                    session_data = self.serializer.loads(data)
+                    app.logger.debug(f"Loaded existing session data for sid: {sid}")
+                    return self.session_class(session_data, sid=sid, permanent=True)
+                except Exception as e:
+                    app.logger.error(f"Error deserializing session data: {e}")
+            
+        except Exception as e:
+            app.logger.error(f"Error loading session from database: {e}")
         
-        # For performance: don't load the session data unless it's necessary
-        # Return a session object that will lazy-load its data
-        return LazyLoadingSession(sid=sid, session_interface=self, app=app, permanent=True)
+        # If we get here, either the session doesn't exist or is expired
+        new_sid = self._generate_sid()
+        app.logger.debug(f"Creating new session due to load failure: {new_sid}")
+        return self.session_class(sid=new_sid, permanent=True)
     
     def save_session(self, app, session, response):
         """Save the session to the database."""
@@ -123,151 +140,101 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         path = self.get_cookie_path(app)
         cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         
-        # Check if response is a function or doesn't have set_cookie method
         if not hasattr(response, 'set_cookie'):
             app.logger.error(f"Response object doesn't have set_cookie method. Type: {type(response)}")
             return
-            
-        # If the session is empty, delete it
+        
+        # Don't save empty sessions
         if not session:
             if session.modified:
                 self._delete_session(session.sid)
                 response.delete_cookie(cookie_name, domain=domain, path=path)
-                app.logger.debug(f"Deleted empty session: {session.sid}")
-            return
-            
-        # Important optimization: Only save if the session was actually modified
-        if not session.modified:
-            app.logger.debug(f"Session not modified, skipping database save: {session.sid}")
             return
         
-        # Determine when the session should expire
+        # Only save if modified
+        if not session.modified:
+            return
+            
         httponly = self.get_cookie_httponly(app)
         secure = self.get_cookie_secure(app)
         samesite = self.get_cookie_samesite(app)
         expires = self.get_expiration_time(app, session)
         
-        # If the session ID doesn't exist, generate a new one
-        sid = session.sid
-        if not sid:
-            sid = self._generate_sid()
-            session.sid = sid
-            app.logger.debug(f"Generated new session ID: {sid}")
+        sid = session.sid if session.sid else self._generate_sid()
+        
+        # Get current user ID
+        user_id = getattr(current_user, 'id', 1)
+        
+        # Prepare session data
+        session_data = dict(session)
+        
+        # Remove any excluded keys
+        exclude_keys = app.config.get('SESSION_EXCLUDE_KEYS', [])
+        for key in exclude_keys:
+            session_data.pop(key, None)
+        
+        # Ensure we're not storing empty data
+        if not session_data:
+            session_data['_created'] = datetime.utcnow().isoformat()
+        
+        try:
+            # Serialize the data
+            serialized = self.serializer.dumps(session_data)
+            encoded_data = b64encode(serialized).decode('utf-8')
             
-        # Get the user ID
-        try:
-            user_id = current_user.id if current_user.is_authenticated else 1  # Default to guest user ID
-        except Exception as e:
-            app.logger.error(f"Error getting user ID for session, using default: {e}")
-            user_id = 1  # Default to guest user ID
-        
-        # Minimize session data size - only store essential data
-        # Create a filtered copy that only includes necessary data
-        essential_data = {}
-        for key, value in dict(session).items():
-            # Skip large objects or non-essential data
-            if key.startswith('_') or key in app.config.get('SESSION_EXCLUDE_KEYS', []):
-                continue
-                
-            # Special handling for user data - only store ID not the entire object
-            if key == 'user' and hasattr(value, 'id'):
-                essential_data['user_id'] = value.id
-                continue
-                
-            essential_data[key] = value
-        
-        # Serialize the session data
-        try:
-            serialized_data = self.serializer.dumps(essential_data)
-            data = b64encode(serialized_data).decode('utf-8')
-            app.logger.debug(f"Serialized session data for sid: {sid}")
-        except Exception as e:
-            app.logger.error(f"Error serializing session data: {e}")
-            # Use an empty string as fallback
-            data = b64encode(self.serializer.dumps({})).decode('utf-8')
-        
-        # Save the session to the database
-        try:
+            # Save to database
             conn = self.db.connect()
-            trans = conn.begin()  # Start a transaction explicitly
+            trans = conn.begin()
             
             try:
-                # Check if the session already exists
-                result = conn.execute(
-                    sa.select(self.table.c.id)
-                    .where(self.table.c.id == sid)
-                ).fetchone()
+                # Upsert the session
+                stmt = sa.text("""
+                    INSERT INTO dashboard_sessions (id, user_id, data, created_at, expires_at)
+                    VALUES (:sid, :user_id, :data, :created_at, :expires_at)
+                    ON DUPLICATE KEY UPDATE
+                        user_id = VALUES(user_id),
+                        data = VALUES(data),
+                        expires_at = VALUES(expires_at)
+                """)
                 
-                if result is None:
-                    # Insert a new session
-                    app.logger.debug(f"Inserting new session record for sid: {sid}")
-                    conn.execute(
-                        self.table.insert().values(
-                            id=sid,
-                            user_id=user_id,
-                            data=data,
-                            expires_at=expires
-                        )
-                    )
-                else:
-                    # Update the existing session
-                    app.logger.debug(f"Updating existing session record for sid: {sid}")
-                    conn.execute(
-                        self.table.update()
-                        .where(self.table.c.id == sid)
-                        .values(
-                            user_id=user_id,
-                            data=data,
-                            expires_at=expires
-                        )
-                    )
-                
-                # Commit the transaction
-                trans.commit()
-                app.logger.debug(f"Session data committed to database for sid: {sid}")
-            except Exception as e:
-                # Rollback the transaction in case of error
-                trans.rollback()
-                app.logger.error(f"Error in database transaction, rolled back: {e}")
-                raise
-            finally:
-                conn.close()
-        except Exception as e:
-            app.logger.error(f"Error saving session to database: {e}")
-            
-        # Set the session cookie
-        try:
-            if self.key_prefix:
-                cookie_sid = self.key_prefix + sid
-            else:
-                cookie_sid = sid
-                
-            if self.use_signer:
-                from itsdangerous.url_safe import URLSafeSerializer
-                signer = URLSafeSerializer(app.secret_key)
-                cookie_sid = signer.dumps(cookie_sid)
-                
-            app.logger.debug(f"Setting session cookie: {cookie_name}={cookie_sid[:10]}...")
-            
-            # Double-check response object has set_cookie method
-            if hasattr(response, 'set_cookie'):
-                response.set_cookie(
-                    cookie_name,
-                    cookie_sid,
-                    expires=expires,
-                    httponly=httponly,
-                    domain=domain,
-                    path=path,
-                    secure=secure,
-                    samesite=samesite
+                conn.execute(
+                    stmt,
+                    {
+                        'sid': sid,
+                        'user_id': user_id,
+                        'data': encoded_data,
+                        'created_at': datetime.utcnow(),
+                        'expires_at': expires
+                    }
                 )
-            else:
-                app.logger.error(f"Response object still doesn't have set_cookie method at final step. Type: {type(response)}")
+                
+                trans.commit()
+                app.logger.debug(f"Successfully saved session {sid} to database")
+                
+            except Exception as e:
+                trans.rollback()
+                app.logger.error(f"Error saving session to database: {e}")
+                raise
+                
         except Exception as e:
-            app.logger.error(f"Error setting session cookie: {e}")
-            # Log the full traceback for debugging
-            import traceback
-            app.logger.error(f"Full traceback: {traceback.format_exc()}")
+            app.logger.error(f"Error in save_session: {e}")
+            return
+            
+        # Set the cookie
+        if self.use_signer:
+            signer = URLSafeSerializer(app.secret_key)
+            sid = signer.dumps(sid)
+            
+        response.set_cookie(
+            cookie_name,
+            sid,
+            expires=expires,
+            httponly=httponly,
+            domain=domain,
+            path=path,
+            secure=secure,
+            samesite=samesite
+        )
     
     def _generate_sid(self):
         """Generate a unique session ID."""
