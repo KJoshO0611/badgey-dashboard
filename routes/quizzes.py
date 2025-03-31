@@ -18,11 +18,14 @@ def list():
     try:
         logger.info("Fetching quizzes for list view")
         
-        # Get the cache object from the app
-        cache = current_app.extensions.get('cache')
+        # Get the cache object directly from the app
+        cache = None
+        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+            cache = current_app.extensions['cache']
         
         # Try to get quizzes from cache first
-        if cache:
+        cached_quizzes = None
+        if cache and hasattr(cache, 'get'):
             cache_key = f"quizzes_list_{current_user.id}"
             cached_quizzes = cache.get(cache_key)
             if cached_quizzes:
@@ -42,9 +45,12 @@ def list():
             quiz.question_count = quiz.get_question_count()
         
         # Cache the results for 5 minutes
-        if cache:
-            cache.set(cache_key, quizzes, timeout=300)
-            logger.info(f"Cached quizzes for user {current_user.id}")
+        if cache and hasattr(cache, 'set'):
+            try:
+                cache.set(cache_key, quizzes, timeout=300)
+                logger.info(f"Cached quizzes for user {current_user.id}")
+            except Exception as e:
+                logger.warning(f"Failed to cache quizzes: {e}")
         
         return render_template('quizzes/list.html', quizzes=quizzes)
     except Exception as e:
@@ -82,8 +88,11 @@ def view(quiz_id):
     """View a specific quiz."""
     try:
         # Check cache first
-        cache = current_app.extensions.get('cache')
-        if cache:
+        cache = None
+        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+            cache = current_app.extensions['cache']
+            
+        if cache and hasattr(cache, 'get'):
             cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
             cached_data = cache.get(cache_key)
             if cached_data:
@@ -106,9 +115,12 @@ def view(quiz_id):
             questions = quiz.get_questions()
             
             # Cache the results
-            if cache:
-                cache.set(cache_key, (quiz, questions), timeout=300)
-                logger.info(f"Cached quiz data for quiz {quiz_id}")
+            if cache and hasattr(cache, 'set'):
+                try:
+                    cache.set(cache_key, (quiz, questions), timeout=300)
+                    logger.info(f"Cached quiz data for quiz {quiz_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cache quiz data: {e}")
                 
             return render_template('quizzes/view.html', quiz=quiz, questions=questions)
         except Exception as e:
@@ -196,8 +208,11 @@ def preview(quiz_id):
     """Preview how the quiz will appear to users"""
     try:
         # Check cache first
-        cache = current_app.extensions.get('cache')
-        if cache:
+        cache = None
+        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+            cache = current_app.extensions['cache']
+            
+        if cache and hasattr(cache, 'get'):
             cache_key = f"quiz_preview_{quiz_id}"
             cached_data = cache.get(cache_key)
             if cached_data:
@@ -213,9 +228,12 @@ def preview(quiz_id):
         questions = quiz.get_questions()
         
         # Cache the results
-        if cache:
-            cache.set(cache_key, (quiz, questions), timeout=300)
-            logger.info(f"Cached preview data for quiz {quiz_id}")
+        if cache and hasattr(cache, 'set'):
+            try:
+                cache.set(cache_key, (quiz, questions), timeout=300)
+                logger.info(f"Cached preview data for quiz {quiz_id}")
+            except Exception as e:
+                logger.warning(f"Failed to cache preview data: {e}")
         
         return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
     
