@@ -5,6 +5,7 @@ import json
 from models.quiz import Quiz, QuizNotFoundError
 from decorators import role_required
 from models.db import get_db
+from flask import current_app
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,17 @@ def list():
     try:
         logger.info("Fetching quizzes for list view")
         
+        # Get the cache object from the app
+        cache = current_app.extensions.get('cache')
+        
+        # Try to get quizzes from cache first
+        if cache:
+            cache_key = f"quizzes_list_{current_user.id}"
+            cached_quizzes = cache.get(cache_key)
+            if cached_quizzes:
+                logger.info(f"Using cached quizzes for user {current_user.id}")
+                return render_template('quizzes/list.html', quizzes=cached_quizzes)
+        
         # Get quizzes based on user role
         if current_user.has_role('admin'):
             logger.info("Admin user: fetching all quizzes")
@@ -28,6 +40,11 @@ def list():
         # Add question counts to each quiz
         for quiz in quizzes:
             quiz.question_count = quiz.get_question_count()
+        
+        # Cache the results for 5 minutes
+        if cache:
+            cache.set(cache_key, quizzes, timeout=300)
+            logger.info(f"Cached quizzes for user {current_user.id}")
         
         return render_template('quizzes/list.html', quizzes=quizzes)
     except Exception as e:
@@ -64,6 +81,16 @@ def create():
 def view(quiz_id):
     """View a specific quiz."""
     try:
+        # Check cache first
+        cache = current_app.extensions.get('cache')
+        if cache:
+            cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                logger.info(f"Using cached quiz data for quiz {quiz_id}")
+                quiz, questions = cached_data
+                return render_template('quizzes/view.html', quiz=quiz, questions=questions)
+                
         # Fetch the quiz directly with Quiz model
         try:
             logger.info(f"Fetching quiz with ID {quiz_id} for viewing")
@@ -78,6 +105,11 @@ def view(quiz_id):
             logger.info(f"Fetching questions for quiz {quiz_id}")
             questions = quiz.get_questions()
             
+            # Cache the results
+            if cache:
+                cache.set(cache_key, (quiz, questions), timeout=300)
+                logger.info(f"Cached quiz data for quiz {quiz_id}")
+                
             return render_template('quizzes/view.html', quiz=quiz, questions=questions)
         except Exception as e:
             logger.error(f"Error viewing quiz with model approach: {e}")
@@ -163,12 +195,27 @@ def delete(quiz_id):
 def preview(quiz_id):
     """Preview how the quiz will appear to users"""
     try:
+        # Check cache first
+        cache = current_app.extensions.get('cache')
+        if cache:
+            cache_key = f"quiz_preview_{quiz_id}"
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                logger.info(f"Using cached preview data for quiz {quiz_id}")
+                quiz, questions = cached_data
+                return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
+        
         # Add detailed logging
         logger.info(f"Fetching quiz with ID {quiz_id} for preview")
         quiz = Quiz.get_by_id(quiz_id)
         
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
+        
+        # Cache the results
+        if cache:
+            cache.set(cache_key, (quiz, questions), timeout=300)
+            logger.info(f"Cached preview data for quiz {quiz_id}")
         
         return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
     

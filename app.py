@@ -52,6 +52,17 @@ app.config['DATABASE'] = {
     'database': os.getenv('DBNAME', 'badgey')
 }
 
+# Redis cache configuration
+app.config['CACHE_TYPE'] = 'redis'
+app.config['CACHE_REDIS_HOST'] = os.getenv('REDIS_HOST', 'localhost')
+app.config['CACHE_REDIS_PORT'] = int(os.getenv('REDIS_PORT', 6379))
+app.config['CACHE_REDIS_PASSWORD'] = os.getenv('REDIS_PASSWORD', '')
+app.config['CACHE_REDIS_DB'] = int(os.getenv('REDIS_DB', 0))
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # 5 minutes default
+
+# Initialize the Flask-Caching extension
+cache = Cache(app)
+
 # Session configuration
 # You have two options:
 
@@ -85,7 +96,13 @@ db = sa.create_engine(engine_url)
 
 # Import and use our custom session interface
 from custom_session import CustomSqlAlchemySessionInterface
-app.session_interface = CustomSqlAlchemySessionInterface(db=db)
+app.session_interface = CustomSqlAlchemySessionInterface(
+    db=db,
+    redis_host=app.config['CACHE_REDIS_HOST'],
+    redis_port=app.config['CACHE_REDIS_PORT'],
+    redis_password=app.config['CACHE_REDIS_PASSWORD'],
+    redis_db=app.config['CACHE_REDIS_DB']
+)
 
 app.config['DISCORD_CLIENT_ID'] = os.getenv('DISCORD_CLIENT_ID')
 app.config['DISCORD_CLIENT_SECRET'] = os.getenv('DISCORD_CLIENT_SECRET')
