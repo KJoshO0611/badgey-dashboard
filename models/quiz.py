@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from models.db import get_db
 from models.question import Question, QuestionNotFoundError
+import logging
 
 class QuizNotFoundError(Exception):
     """Exception raised when a quiz is not found"""
@@ -159,6 +160,8 @@ class Quiz:
     def create(name, creator_id, creator_username=None):
         """Create a new quiz"""
         from flask import current_app
+        import logging
+        logger = logging.getLogger(__name__)
         
         conn = get_db()
         with conn.cursor() as cursor:
@@ -171,7 +174,7 @@ class Quiz:
                         if user_data:
                             creator_username = user_data['username']
                 except Exception as e:
-                    print(f"Error fetching username: {e}")
+                    logger.error(f"Error fetching username: {e}")
                     creator_username = str(creator_id)
             
             query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username) VALUES (%s, %s, %s)"
@@ -189,9 +192,9 @@ class Quiz:
                         # Clear cache key for this user's quiz list
                         cache_key = f"quizzes_list_{creator_id}"
                         cache.delete(cache_key)
-                        print(f"Invalidated cache for key: {cache_key}")
+                        logger.info(f"Invalidated cache for key: {cache_key}")
             except Exception as e:
-                print(f"Error invalidating cache: {e}")
+                logger.error(f"Error invalidating cache: {e}")
             
             return Quiz(
                 id=quiz_id,
@@ -204,6 +207,8 @@ class Quiz:
     def update(self, name):
         """Update quiz details"""
         from flask import current_app
+        import logging
+        logger = logging.getLogger(__name__)
         
         conn = get_db()
         with conn.cursor() as cursor:
@@ -222,22 +227,34 @@ class Quiz:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
                         cache.delete(cache_key)
-                        print(f"Invalidated creator's quiz list cache: {cache_key}")
+                        logger.info(f"Invalidated creator's quiz list cache: {cache_key}")
                         
-                        # Clear any view caches for this quiz
-                        # Use a pattern delete if available, otherwise just clear key patterns we know
-                        for pattern in [f"quiz_view_{self.id}_*", f"quiz_preview_{self.id}"]:
-                            if hasattr(cache, 'delete'):
-                                cache.delete(pattern)
-                            print(f"Invalidated quiz cache with pattern: {pattern}")
+                        # Use pattern-based deletion if available
+                        if hasattr(current_app, 'clear_cache_by_pattern'):
+                            # Clear all caches related to this quiz
+                            current_app.clear_cache_by_pattern(cache, f"quiz_view_{self.id}")
+                            current_app.clear_cache_by_pattern(cache, f"quiz_preview_{self.id}")
+                            logger.info(f"Used pattern-based cache invalidation for quiz {self.id}")
+                        else:
+                            # Fallback to specific key deletion
+                            for i in range(1, 10):  # Delete for first few user IDs
+                                view_key = f"quiz_view_{self.id}_{i}"
+                                cache.delete(view_key)
+                            
+                            # Delete preview cache
+                            preview_key = f"quiz_preview_{self.id}"
+                            cache.delete(preview_key)
+                            logger.info(f"Invalidated specific quiz cache keys for quiz {self.id}")
             except Exception as e:
-                print(f"Error invalidating cache: {e}")
+                logger.error(f"Error invalidating cache: {e}")
             
             return True
     
     def delete(self):
         """Delete quiz and all its questions"""
         from flask import current_app
+        import logging
+        logger = logging.getLogger(__name__)
         
         conn = get_db()
         with conn.cursor() as cursor:
@@ -259,15 +276,26 @@ class Quiz:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
                         cache.delete(cache_key)
-                        print(f"Invalidated creator's quiz list cache: {cache_key}")
+                        logger.info(f"Invalidated creator's quiz list cache: {cache_key}")
                         
-                        # Clear any view caches for this quiz
-                        for pattern in [f"quiz_view_{self.id}_*", f"quiz_preview_{self.id}"]:
-                            if hasattr(cache, 'delete'):
-                                cache.delete(pattern)
-                            print(f"Invalidated quiz cache with pattern: {pattern}")
+                        # Use pattern-based deletion if available
+                        if hasattr(current_app, 'clear_cache_by_pattern'):
+                            # Clear all caches related to this quiz
+                            current_app.clear_cache_by_pattern(cache, f"quiz_view_{self.id}")
+                            current_app.clear_cache_by_pattern(cache, f"quiz_preview_{self.id}")
+                            logger.info(f"Used pattern-based cache invalidation for quiz {self.id}")
+                        else:
+                            # Fallback to specific key deletion
+                            for i in range(1, 10):  # Delete for first few user IDs
+                                view_key = f"quiz_view_{self.id}_{i}"
+                                cache.delete(view_key)
+                            
+                            # Delete preview cache
+                            preview_key = f"quiz_preview_{self.id}"
+                            cache.delete(preview_key)
+                            logger.info(f"Invalidated specific quiz cache keys for quiz {self.id}")
             except Exception as e:
-                print(f"Error invalidating cache: {e}")
+                logger.error(f"Error invalidating cache: {e}")
             
             return True
     
@@ -378,27 +406,71 @@ class Quiz:
     @staticmethod
     def from_dict(data):
         """Create a Quiz object from a dictionary (for deserialization from cache)"""
-        created_at = data.get('created_at')
-        if created_at and isinstance(created_at, str):
-            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        import logging
+        logger = logging.getLogger(__name__)
         
-        return Quiz(
-            id=data.get('id'),
-            name=data.get('name'),
-            creator_id=data.get('creator_id'),
-            created_at=created_at,
-            creator_username=data.get('creator_username')
-        )
+        try:
+            created_at = data.get('created_at')
+            if created_at and isinstance(created_at, str):
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except ValueError as e:
+                    logger.warning(f"Could not parse datetime string: {created_at}, error: {e}")
+                    created_at = datetime.now()
+            
+            # Ensure all required fields exist with fallbacks
+            quiz_id = data.get('id')
+            if not quiz_id:
+                raise ValueError("Quiz dictionary missing required 'id' field")
+                
+            return Quiz(
+                id=quiz_id,
+                name=data.get('name', 'Unnamed Quiz'),
+                creator_id=data.get('creator_id', 0),
+                created_at=created_at,
+                creator_username=data.get('creator_username', 'Unknown')
+            )
+        except Exception as e:
+            logger.error(f"Error deserializing quiz from dictionary: {e}", exc_info=True)
+            raise
         
     @staticmethod
     def question_from_dict(data):
         """Create a Question object from a dictionary (for deserialization from cache)"""
-        return Question(
-            id=data.get('id'),
-            quiz_id=data.get('quiz_id'),
-            text=data.get('text'),
-            options=data.get('options', {}),
-            correct_answer=data.get('correct_answer'),
-            score=data.get('score', 10),
-            explanation=data.get('explanation')
-        ) 
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Ensure all required fields exist with fallbacks
+            question_id = data.get('id')
+            quiz_id = data.get('quiz_id')
+            
+            if not question_id or not quiz_id:
+                logger.error(f"Question dictionary missing required fields: {data}")
+                raise ValueError("Question dictionary missing required fields: 'id' or 'quiz_id'")
+            
+            # Ensure options is a dictionary
+            options = data.get('options', {})
+            if not isinstance(options, dict):
+                logger.warning(f"Question options is not a dictionary, converting: {options}")
+                if isinstance(options, str):
+                    try:
+                        import json
+                        options = json.loads(options)
+                    except:
+                        options = {}
+                else:
+                    options = {}
+            
+            return Question(
+                id=question_id,
+                quiz_id=quiz_id,
+                text=data.get('text', 'No question text'),
+                options=options,
+                correct_answer=data.get('correct_answer', ''),
+                score=data.get('score', 10),
+                explanation=data.get('explanation', '')
+            )
+        except Exception as e:
+            logger.error(f"Error deserializing question from dictionary: {e}", exc_info=True)
+            raise 

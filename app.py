@@ -41,6 +41,32 @@ logger = logging.getLogger(__name__)
 logging.getLogger('flask').setLevel(logging.DEBUG)
 logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
+# Cache utility functions
+def clear_cache_by_pattern(cache, pattern):
+    """Clear all keys from cache that match a pattern (prefix)
+    
+    This is a utility function to clear cache by pattern since Flask-Caching
+    doesn't support pattern-based deletion directly.
+    """
+    if not cache:
+        return
+        
+    try:
+        # If it's a Redis cache, use the Redis client directly
+        if hasattr(cache, 'cache') and hasattr(cache.cache, 'get_client'):
+            redis_client = cache.cache.get_client()
+            if redis_client:
+                # Use Redis' scan_iter to find keys by pattern
+                keys = redis_client.scan_iter(f"{cache.config.get('KEY_PREFIX', '')}{pattern}*")
+                for key in keys:
+                    redis_client.delete(key)
+                logger.info(f"Cleared Redis cache keys matching pattern: {pattern}")
+        else:
+            # For other cache types, log that we can't clear by pattern
+            logger.warning(f"Cache type {type(cache)} doesn't support pattern-based deletion")
+    except Exception as e:
+        logger.error(f"Error clearing cache by pattern: {e}")
+
 # Create and configure the app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev')
@@ -93,6 +119,9 @@ except Exception as e:
 
 # Make cache available to all blueprints
 app.extensions['cache'] = cache
+
+# Add utility functions to the app context
+app.clear_cache_by_pattern = clear_cache_by_pattern
 
 # Session configuration
 # You have two options:
