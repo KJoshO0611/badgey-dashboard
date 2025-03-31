@@ -2,6 +2,7 @@ import logging
 from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify
 from flask_login import login_required, current_user
 import json
+import pickle
 from models.quiz import Quiz, QuizNotFoundError
 from decorators import role_required
 from models.db import get_db
@@ -10,6 +11,24 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 quizzes_bp = Blueprint('quizzes', __name__, url_prefix='/quizzes')
+
+def serialize_quiz_data(quizzes):
+    """Serialize quiz data for caching."""
+    if isinstance(quizzes, list):
+        # Return a list of dictionaries
+        return [quiz.to_dict() for quiz in quizzes]
+    else:
+        # Return a single dictionary
+        return quizzes.to_dict()
+
+def deserialize_quiz_data(data, is_list=True):
+    """Deserialize quiz data from cache."""
+    if is_list:
+        # Convert list of dicts to list of Quiz objects
+        return [Quiz.from_dict(quiz_dict) for quiz_dict in data]
+    else:
+        # Convert dict to Quiz object
+        return Quiz.from_dict(data)
 
 @quizzes_bp.route('/')
 @login_required
@@ -27,10 +46,11 @@ def list():
         cached_quizzes = None
         if cache and hasattr(cache, 'get'):
             cache_key = f"quizzes_list_{current_user.id}"
-            cached_quizzes = cache.get(cache_key)
-            if cached_quizzes:
+            cached_data = cache.get(cache_key)
+            if cached_data:
                 logger.info(f"Using cached quizzes for user {current_user.id}")
-                return render_template('quizzes/list.html', quizzes=cached_quizzes)
+                quizzes = deserialize_quiz_data(cached_data)
+                return render_template('quizzes/list.html', quizzes=quizzes)
         
         # Get quizzes based on user role
         if current_user.has_role('admin'):
@@ -47,7 +67,8 @@ def list():
         # Cache the results for 5 minutes
         if cache and hasattr(cache, 'set'):
             try:
-                cache.set(cache_key, quizzes, timeout=300)
+                serialized_data = serialize_quiz_data(quizzes)
+                cache.set(cache_key, serialized_data, timeout=300)
                 logger.info(f"Cached quizzes for user {current_user.id}")
             except Exception as e:
                 logger.warning(f"Failed to cache quizzes: {e}")
@@ -97,7 +118,9 @@ def view(quiz_id):
             cached_data = cache.get(cache_key)
             if cached_data:
                 logger.info(f"Using cached quiz data for quiz {quiz_id}")
-                quiz, questions = cached_data
+                quiz_data, questions_data = cached_data
+                quiz = deserialize_quiz_data(quiz_data, is_list=False)
+                questions = [Quiz.question_from_dict(q) for q in questions_data]
                 return render_template('quizzes/view.html', quiz=quiz, questions=questions)
                 
         # Fetch the quiz directly with Quiz model
@@ -117,7 +140,9 @@ def view(quiz_id):
             # Cache the results
             if cache and hasattr(cache, 'set'):
                 try:
-                    cache.set(cache_key, (quiz, questions), timeout=300)
+                    quiz_data = serialize_quiz_data(quiz)
+                    questions_data = [q.to_dict() for q in questions]
+                    cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                     logger.info(f"Cached quiz data for quiz {quiz_id}")
                 except Exception as e:
                     logger.warning(f"Failed to cache quiz data: {e}")
@@ -217,7 +242,9 @@ def preview(quiz_id):
             cached_data = cache.get(cache_key)
             if cached_data:
                 logger.info(f"Using cached preview data for quiz {quiz_id}")
-                quiz, questions = cached_data
+                quiz_data, questions_data = cached_data
+                quiz = deserialize_quiz_data(quiz_data, is_list=False)
+                questions = [Quiz.question_from_dict(q) for q in questions_data]
                 return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
         
         # Add detailed logging
@@ -230,7 +257,9 @@ def preview(quiz_id):
         # Cache the results
         if cache and hasattr(cache, 'set'):
             try:
-                cache.set(cache_key, (quiz, questions), timeout=300)
+                quiz_data = serialize_quiz_data(quiz)
+                questions_data = [q.to_dict() for q in questions]
+                cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                 logger.info(f"Cached preview data for quiz {quiz_id}")
             except Exception as e:
                 logger.warning(f"Failed to cache preview data: {e}")

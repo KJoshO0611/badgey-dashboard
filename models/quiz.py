@@ -297,4 +297,32 @@ class Quiz:
                 return result['count'] if result else 0
         except Exception as e:
             print(f"Error getting completion count: {e}")
-            return 0 
+            return 0
+    
+    @staticmethod
+    def from_dict(data):
+        """Create a Quiz object from a dictionary (for deserialization from cache)"""
+        created_at = data.get('created_at')
+        if created_at and isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+        
+        return Quiz(
+            id=data.get('id'),
+            name=data.get('name'),
+            creator_id=data.get('creator_id'),
+            created_at=created_at,
+            creator_username=data.get('creator_username')
+        )
+        
+    @staticmethod
+    def question_from_dict(data):
+        """Create a Question object from a dictionary (for deserialization from cache)"""
+        return Question(
+            id=data.get('id'),
+            quiz_id=data.get('quiz_id'),
+            text=data.get('text'),
+            options=data.get('options', {}),
+            correct_answer=data.get('correct_answer'),
+            score=data.get('score', 10),
+            explanation=data.get('explanation')
+        ) 
