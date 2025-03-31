@@ -386,15 +386,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentSlide = questionSlides[index];
         currentSlide.style.display = 'block';
         
+        // Get references to feedback elements
+        const feedbackContainer = currentSlide.querySelector('.feedback-container');
+        const checkBtn = currentSlide.querySelector('.check-answer-btn');
+        const nextBtn = currentSlide.querySelector('.next-btn');
+        const explanationBox = currentSlide.querySelector('.explanation-box');
+        const correctFeedback = currentSlide.querySelector('.correct-feedback');
+        const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
+        
         // Check if this question has been answered
         if (answeredQuestions[index]) {
             // This question has been answered before, restore its state
-            const feedbackContainer = currentSlide.querySelector('.feedback-container');
-            const checkBtn = currentSlide.querySelector('.check-answer-btn');
-            const nextBtn = currentSlide.querySelector('.next-btn');
-            const explanationBox = currentSlide.querySelector('.explanation-box');
-            const correctFeedback = currentSlide.querySelector('.correct-feedback');
-            const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
             
             // Make sure the correct radio button is checked
             if (answeredQuestions[index].selectedOption) {
@@ -433,6 +435,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show explanation if available
             if (explanationBox) explanationBox.style.display = 'block';
+        } else {
+            // This question hasn't been answered yet, hide all feedback elements
+            if (feedbackContainer) feedbackContainer.style.display = 'none';
+            if (correctFeedback) correctFeedback.style.display = 'none';
+            if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+            if (explanationBox) explanationBox.style.display = 'none';
+            
+            // Show check button, hide next button
+            if (checkBtn) checkBtn.style.display = 'block';
+            if (nextBtn) nextBtn.style.display = 'none';
+            
+            // Clear any selected radio buttons
+            const radioButtons = currentSlide.querySelectorAll('input[type="radio"]');
+            radioButtons.forEach(radio => {
+                radio.checked = false;
+            });
         }
         
         // Update progress bar
