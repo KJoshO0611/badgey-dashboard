@@ -278,6 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Make sure feedback is visible and stays visible
             feedbackContainer.style.display = 'block';
             
             const correctFeedback = questionSlide.querySelector('.correct-feedback');
@@ -324,8 +325,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 explanationBox.style.display = 'block';
             }
             
-            // Mark question as answered
-            answeredQuestions[questionIndex] = true;
+            // Store the feedback state for this question
+            if (!answeredQuestions[questionIndex]) {
+                answeredQuestions[questionIndex] = {
+                    isCorrect: isCorrect,
+                    selectedOption: selectedOption.value
+                };
+            }
             
             // Show next button, hide check answer button
             this.style.display = 'none';
@@ -346,12 +352,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show next question or results if last question
             if (questionIndex < totalQuestions - 1) {
-                // Only clear the feedback when moving to the next question via Next button
-                const feedbackContainer = questionSlide.querySelector('.feedback-container');
-                if (feedbackContainer) {
-                    feedbackContainer.style.display = 'none';
-                }
-                
+                // We don't need to clear feedback when moving to the next question
+                // The feedback will be properly managed by the showQuestion function
                 showQuestion(questionIndex + 1);
             } else {
                 showResults();
@@ -381,52 +383,56 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // Show current question
-        questionSlides[index].style.display = 'block';
+        const currentSlide = questionSlides[index];
+        currentSlide.style.display = 'block';
         
         // Check if this question has been answered
         if (answeredQuestions[index]) {
-            // If it's been answered, we should restore the feedback state
-            const currentSlide = questionSlides[index];
+            // This question has been answered before, restore its state
             const feedbackContainer = currentSlide.querySelector('.feedback-container');
             const checkBtn = currentSlide.querySelector('.check-answer-btn');
             const nextBtn = currentSlide.querySelector('.next-btn');
+            const explanationBox = currentSlide.querySelector('.explanation-box');
+            const correctFeedback = currentSlide.querySelector('.correct-feedback');
+            const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
             
+            // Make sure the correct radio button is checked
+            if (answeredQuestions[index].selectedOption) {
+                const selectedOption = currentSlide.querySelector(`input[value="${answeredQuestions[index].selectedOption}"]`);
+                if (selectedOption) selectedOption.checked = true;
+            }
+            
+            // Make the feedback visible again
             if (feedbackContainer) feedbackContainer.style.display = 'block';
+            
+            // Hide check button and show next button
             if (checkBtn) checkBtn.style.display = 'none';
             if (nextBtn) nextBtn.style.display = 'block';
             
-            // Also show the correct feedback
-            const selectedOption = currentSlide.querySelector('input[type="radio"]:checked');
-            if (selectedOption) {
-                const isCorrect = selectedOption.dataset.correct === 'true';
-                const correctFeedback = currentSlide.querySelector('.correct-feedback');
-                const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
-                const explanationBox = currentSlide.querySelector('.explanation-box');
+            // Show the correct feedback based on whether answer was correct
+            if (answeredQuestions[index].isCorrect) {
+                if (correctFeedback) correctFeedback.style.display = 'block';
+                if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+            } else {
+                if (correctFeedback) correctFeedback.style.display = 'none';
+                if (incorrectFeedback) incorrectFeedback.style.display = 'block';
                 
-                if (isCorrect) {
-                    if (correctFeedback) correctFeedback.style.display = 'block';
-                    if (incorrectFeedback) incorrectFeedback.style.display = 'none';
-                } else {
-                    if (correctFeedback) correctFeedback.style.display = 'none';
-                    if (incorrectFeedback) incorrectFeedback.style.display = 'block';
-                    
-                    // Show which answer was correct
-                    const correctOption = currentSlide.querySelector('input[data-correct="true"]');
-                    if (correctOption) {
-                        const correctAnswerLabel = correctOption.nextElementSibling;
-                        if (correctAnswerLabel) {
-                            const correctAnswerText = correctAnswerLabel.textContent.trim();
-                            const correctAnswerElement = currentSlide.querySelector('.correct-answer-text');
-                            if (correctAnswerElement) {
-                                correctAnswerElement.textContent = correctAnswerText;
-                            }
+                // Show which answer was correct
+                const correctOption = currentSlide.querySelector('input[data-correct="true"]');
+                if (correctOption) {
+                    const correctAnswerLabel = correctOption.nextElementSibling;
+                    if (correctAnswerLabel) {
+                        const correctAnswerText = correctAnswerLabel.textContent.trim();
+                        const correctAnswerElement = currentSlide.querySelector('.correct-answer-text');
+                        if (correctAnswerElement) {
+                            correctAnswerElement.textContent = correctAnswerText;
                         }
                     }
                 }
-                
-                // Show explanation if available
-                if (explanationBox) explanationBox.style.display = 'block';
             }
+            
+            // Show explanation if available
+            if (explanationBox) explanationBox.style.display = 'block';
         }
         
         // Update progress bar
