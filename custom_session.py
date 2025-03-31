@@ -5,6 +5,7 @@ Custom Session Interface for Flask-Session that works with our existing dashboar
 import pickle
 import sqlalchemy as sa
 import redis
+import logging
 from base64 import b64encode, b64decode
 from datetime import datetime, timedelta
 from flask.sessions import SessionInterface, SessionMixin
@@ -13,6 +14,9 @@ from werkzeug.datastructures import CallbackDict
 from flask_login import current_user
 from uuid import uuid4
 from itsdangerous.url_safe import URLSafeSerializer
+
+# Create a standard logger instead of using current_app.logger
+logger = logging.getLogger(__name__)
 
 class CustomSqlAlchemySession(CallbackDict, SessionMixin):
     """Custom session class that works with our dashboard_sessions table schema."""
@@ -53,24 +57,16 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         self.key_prefix = key_prefix
         self.use_signer = use_signer
         
-        # Initialize Redis connection for caching if host is provided
+        # Store Redis connection parameters for later initialization
         self.redis = None
-        if redis_host:
-            try:
-                self.redis = redis.Redis(
-                    host=redis_host,
-                    port=redis_port,
-                    password=redis_password,
-                    db=redis_db,
-                    socket_timeout=1,
-                    socket_connect_timeout=1
-                )
-                # Test Redis connection
-                self.redis.ping()
-                current_app.logger.info("Redis cache connection established")
-            except Exception as e:
-                current_app.logger.error(f"Redis connection failed: {e}")
-                self.redis = None
+        self.redis_params = {
+            'host': redis_host,
+            'port': redis_port,
+            'password': redis_password,
+            'db': redis_db,
+            'socket_timeout': 1,
+            'socket_connect_timeout': 1
+        }
         
         # Define the session model to match our schema
         class SessionModel(object):
@@ -103,6 +99,26 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             
         # Create the session model class
         self.session_model = type('CustomSessionModel', (SessionModel,), {})
+    
+    def _get_redis(self):
+        """Lazily initialize Redis connection only when needed and within app context."""
+        if self.redis is not None:
+            return self.redis
+        
+        # Only initialize if host is provided
+        if not self.redis_params['host']:
+            return None
+            
+        try:
+            self.redis = redis.Redis(**self.redis_params)
+            # Test the connection
+            self.redis.ping()
+            logger.info("Redis cache connection established")
+            return self.redis
+        except Exception as e:
+            logger.error(f"Redis connection failed: {e}")
+            self.redis = None
+            return None
         
     def open_session(self, app, request):
         """Open a session from the request."""
@@ -133,9 +149,10 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 return self.session_class(sid=new_sid, permanent=True)
         
         # Try to get session from Redis cache first
-        if self.redis:
+        redis_client = self._get_redis()
+        if redis_client:
             try:
-                cached_data = self.redis.get(f"session:{sid}")
+                cached_data = redis_client.get(f"session:{sid}")
                 if cached_data:
                     app.logger.debug(f"Session found in Redis cache: {sid}")
                     session_data = self.serializer.loads(cached_data)
@@ -159,11 +176,12 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                     app.logger.debug(f"Loaded existing session data for sid: {sid}")
                     
                     # Store in Redis cache for faster future access
-                    if self.redis:
+                    redis_client = self._get_redis()
+                    if redis_client:
                         try:
                             # Calculate TTL based on session expiration
                             ttl = app.config.get('PERMANENT_SESSION_LIFETIME', timedelta(days=7)).total_seconds()
-                            self.redis.setex(
+                            redis_client.setex(
                                 f"session:{sid}", 
                                 int(ttl), 
                                 self.serializer.dumps(session_data)
@@ -262,11 +280,12 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
                 app.logger.debug(f"Successfully saved session {sid} to database")
                 
                 # Also update the Redis cache
-                if self.redis:
+                redis_client = self._get_redis()
+                if redis_client:
                     try:
                         # Calculate TTL based on session expiration
                         ttl = app.config.get('PERMANENT_SESSION_LIFETIME', timedelta(days=7)).total_seconds()
-                        self.redis.setex(
+                        redis_client.setex(
                             f"session:{sid}", 
                             int(ttl), 
                             serialized  # Use the non-base64 serialized data for Redis
@@ -314,23 +333,24 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
             try:
                 conn.execute(self.table.delete().where(self.table.c.id == sid))
                 trans.commit()  # Commit the delete transaction
-                current_app.logger.debug(f"Deleted session from DB: {sid}")
+                logger.debug(f"Deleted session from DB: {sid}")
                 
                 # Also delete from Redis if available
-                if self.redis:
+                redis_client = self._get_redis()
+                if redis_client:
                     try:
-                        self.redis.delete(f"session:{sid}")
-                        current_app.logger.debug(f"Deleted session from Redis: {sid}")
+                        redis_client.delete(f"session:{sid}")
+                        logger.debug(f"Deleted session from Redis: {sid}")
                     except Exception as e:
-                        current_app.logger.error(f"Error deleting session from Redis: {e}")
+                        logger.error(f"Error deleting session from Redis: {e}")
                 
             except Exception as e:
                 trans.rollback()  # Rollback on error
-                current_app.logger.error(f"Error deleting session from DB, rolled back: {e}")
+                logger.error(f"Error deleting session from DB, rolled back: {e}")
             finally:
                 conn.close()
         except Exception as e:
-            current_app.logger.error(f"Error deleting session: {e}")
+            logger.error(f"Error deleting session: {e}")
 
 # New class for lazy loading session data
 class LazyLoadingSession(CustomSqlAlchemySession):
