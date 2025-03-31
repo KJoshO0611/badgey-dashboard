@@ -366,24 +366,68 @@ document.addEventListener('DOMContentLoaded', function() {
             const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
             
             if (questionIndex > 0) {
-                showQuestion(questionIndex - 1);
+                showQuestion(questionIndex - 1, true);
             }
         });
     });
     
     // Function to show a specific question
-    function showQuestion(index) {
+    function showQuestion(index, keepFeedback = false) {
         currentQuestion = index;
         
         // Hide all questions
         questionSlides.forEach(question => {
             question.style.display = 'none';
-            
-            // DO NOT reset feedback here - this keeps feedback visible until user moves to next question
         });
         
         // Show current question
         questionSlides[index].style.display = 'block';
+        
+        // Check if this question has been answered
+        if (answeredQuestions[index]) {
+            // If it's been answered, we should restore the feedback state
+            const currentSlide = questionSlides[index];
+            const feedbackContainer = currentSlide.querySelector('.feedback-container');
+            const checkBtn = currentSlide.querySelector('.check-answer-btn');
+            const nextBtn = currentSlide.querySelector('.next-btn');
+            
+            if (feedbackContainer) feedbackContainer.style.display = 'block';
+            if (checkBtn) checkBtn.style.display = 'none';
+            if (nextBtn) nextBtn.style.display = 'block';
+            
+            // Also show the correct feedback
+            const selectedOption = currentSlide.querySelector('input[type="radio"]:checked');
+            if (selectedOption) {
+                const isCorrect = selectedOption.dataset.correct === 'true';
+                const correctFeedback = currentSlide.querySelector('.correct-feedback');
+                const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
+                const explanationBox = currentSlide.querySelector('.explanation-box');
+                
+                if (isCorrect) {
+                    if (correctFeedback) correctFeedback.style.display = 'block';
+                    if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+                } else {
+                    if (correctFeedback) correctFeedback.style.display = 'none';
+                    if (incorrectFeedback) incorrectFeedback.style.display = 'block';
+                    
+                    // Show which answer was correct
+                    const correctOption = currentSlide.querySelector('input[data-correct="true"]');
+                    if (correctOption) {
+                        const correctAnswerLabel = correctOption.nextElementSibling;
+                        if (correctAnswerLabel) {
+                            const correctAnswerText = correctAnswerLabel.textContent.trim();
+                            const correctAnswerElement = currentSlide.querySelector('.correct-answer-text');
+                            if (correctAnswerElement) {
+                                correctAnswerElement.textContent = correctAnswerText;
+                            }
+                        }
+                    }
+                }
+                
+                // Show explanation if available
+                if (explanationBox) explanationBox.style.display = 'block';
+            }
+        }
         
         // Update progress bar
         updateProgress(index);
