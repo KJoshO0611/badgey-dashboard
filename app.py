@@ -100,6 +100,9 @@ try:
     cache = Cache(app)
     logger.info("Flask-Caching extension initialized successfully")
     
+    # Make cache available directly from app
+    app.cache = cache
+    
     # Test if cache is working
     test_key = 'cache_test'
     test_value = 'test_value'
@@ -115,6 +118,8 @@ except Exception as e:
     # Fallback to simple cache if Redis fails
     app.config['CACHE_TYPE'] = 'SimpleCache'
     cache = Cache(app)
+    # Make cache available directly from app
+    app.cache = cache
     logger.info("Falling back to SimpleCache due to Redis initialization failure")
 
 # DO NOT add cache to extensions dict - this causes problems with flask-caching internals

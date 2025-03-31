@@ -7,8 +7,8 @@ from models.quiz import Quiz, QuizNotFoundError
 from decorators import role_required
 from models.db import get_db
 from flask import current_app
-# Import the cache directly
-from app import cache
+# Remove the direct cache import which causes circular imports
+# from app import cache
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,13 @@ def deserialize_quiz_data(data, is_list=True):
         logger.error(f"Error in deserialize_quiz_data: {e}")
         raise
 
+# Function to safely get the cache object
+def get_cache():
+    """Safely get the cache object from the current app"""
+    if hasattr(current_app, 'cache'):
+        return current_app.cache
+    return None
+
 @quizzes_bp.route('/')
 @login_required
 def list():
@@ -59,11 +66,12 @@ def list():
         for quiz in quizzes:
             quiz.question_count = quiz.get_question_count()
         
-        # Try to get quizzes from cache first - with direct cache import
+        # Try to get quizzes from cache first - using get_cache function
         try:
             cache_key = f"quizzes_list_{current_user.id}"
+            cache = get_cache()
             
-            # Check if we can use the imported cache
+            # Check if we can use the cache
             if cache:
                 try:
                     logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
@@ -77,7 +85,7 @@ def list():
                 except Exception as cache_get_error:
                     logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
             
-            # Try to cache the results - with direct cache import
+            # Try to cache the results - using get_cache function
             if cache:
                 try:
                     logger.info(f"Attempting to cache quizzes with key: {cache_key}")
@@ -139,9 +147,10 @@ def view(quiz_id):
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
-        # Check cache with direct cache import
+        # Check cache with get_cache helper
         try:
             cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+            cache = get_cache()
             
             # Try to get from cache
             if cache:
@@ -262,9 +271,10 @@ def preview(quiz_id):
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
-        # Check cache with direct cache import
+        # Check cache with get_cache helper
         try:
             cache_key = f"quiz_preview_{quiz_id}"
+            cache = get_cache()
             
             # Try to get from cache
             if cache:

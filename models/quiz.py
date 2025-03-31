@@ -160,8 +160,8 @@ class Quiz:
     def create(name, creator_id, creator_username=None):
         """Create a new quiz"""
         try:
-            # Import cache directly instead of via current_app
-            from app import cache
+            # Don't import from app directly - use get_cache helper
+            from flask import current_app
             import logging
             logger = logging.getLogger(__name__)
             
@@ -188,6 +188,7 @@ class Quiz:
                 
                 # Invalidate any user's quizzes list cache
                 try:
+                    cache = current_app.cache if hasattr(current_app, 'cache') else None
                     if cache:
                         # Clear cache key for this user's quiz list
                         cache_key = f"quizzes_list_{creator_id}"
@@ -212,8 +213,8 @@ class Quiz:
     def update(self, name):
         """Update quiz details"""
         try:
-            # Import cache directly instead of via current_app
-            from app import cache
+            # Don't import from app directly - use get_cache helper
+            from flask import current_app
             import logging
             logger = logging.getLogger(__name__)
             
@@ -228,6 +229,7 @@ class Quiz:
                 
                 # Invalidate caches
                 try:
+                    cache = current_app.cache if hasattr(current_app, 'cache') else None
                     if cache:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
@@ -256,8 +258,8 @@ class Quiz:
     def delete(self):
         """Delete quiz and all its questions"""
         try:
-            # Import cache directly instead of via current_app
-            from app import cache
+            # Don't import from app directly - use get_cache helper
+            from flask import current_app
             import logging
             logger = logging.getLogger(__name__)
             
@@ -275,6 +277,7 @@ class Quiz:
                 
                 # Invalidate caches
                 try:
+                    cache = current_app.cache if hasattr(current_app, 'cache') else None
                     if cache:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
