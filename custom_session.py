@@ -112,7 +112,7 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         try:
             conn = self.db.connect()
             result = conn.execute(
-                sa.select([self.table.c.data])
+                sa.select(self.table.c.data)
                 .where(self.table.c.id == sid)
                 .where(self.table.c.expires_at > datetime.utcnow())
             ).fetchone()
