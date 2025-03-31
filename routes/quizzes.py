@@ -14,21 +14,29 @@ quizzes_bp = Blueprint('quizzes', __name__, url_prefix='/quizzes')
 
 def serialize_quiz_data(quizzes):
     """Serialize quiz data for caching."""
-    if isinstance(quizzes, list):
-        # Return a list of dictionaries
-        return [quiz.to_dict() for quiz in quizzes]
-    else:
-        # Return a single dictionary
-        return quizzes.to_dict()
+    try:
+        if isinstance(quizzes, list):
+            # Return a list of dictionaries
+            return [quiz.to_dict() for quiz in quizzes]
+        else:
+            # Return a single dictionary
+            return quizzes.to_dict()
+    except Exception as e:
+        logger.error(f"Error in serialize_quiz_data: {e}")
+        raise
 
 def deserialize_quiz_data(data, is_list=True):
     """Deserialize quiz data from cache."""
-    if is_list:
-        # Convert list of dicts to list of Quiz objects
-        return [Quiz.from_dict(quiz_dict) for quiz_dict in data]
-    else:
-        # Convert dict to Quiz object
-        return Quiz.from_dict(data)
+    try:
+        if is_list:
+            # Convert list of dicts to list of Quiz objects
+            return [Quiz.from_dict(quiz_dict) for quiz_dict in data]
+        else:
+            # Convert dict to Quiz object
+            return Quiz.from_dict(data)
+    except Exception as e:
+        logger.error(f"Error in deserialize_quiz_data: {e}")
+        raise
 
 @quizzes_bp.route('/')
 @login_required
@@ -41,16 +49,26 @@ def list():
         cache = None
         if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
             cache = current_app.extensions['cache']
+            logger.info("Cache extension found")
+        else:
+            logger.warning("Cache extension not found in current_app.extensions")
+            logger.debug(f"Available extensions: {list(current_app.extensions.keys()) if hasattr(current_app, 'extensions') else 'none'}")
         
         # Try to get quizzes from cache first
         cached_quizzes = None
+        cache_key = f"quizzes_list_{current_user.id}"
+        
         if cache and hasattr(cache, 'get'):
-            cache_key = f"quizzes_list_{current_user.id}"
+            logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
             cached_data = cache.get(cache_key)
             if cached_data:
                 logger.info(f"Using cached quizzes for user {current_user.id}")
                 quizzes = deserialize_quiz_data(cached_data)
                 return render_template('quizzes/list.html', quizzes=quizzes)
+            else:
+                logger.info(f"No cached data found for key: {cache_key}")
+        else:
+            logger.warning("Cache object not available or doesn't have get method")
         
         # Get quizzes based on user role
         if current_user.has_role('admin'):
@@ -67,11 +85,13 @@ def list():
         # Cache the results for 5 minutes
         if cache and hasattr(cache, 'set'):
             try:
+                logger.info(f"Attempting to cache quizzes with key: {cache_key}")
                 serialized_data = serialize_quiz_data(quizzes)
                 cache.set(cache_key, serialized_data, timeout=300)
                 logger.info(f"Cached quizzes for user {current_user.id}")
             except Exception as e:
                 logger.warning(f"Failed to cache quizzes: {e}")
+                logger.error(f"Cache error details", exc_info=True)
         
         return render_template('quizzes/list.html', quizzes=quizzes)
     except Exception as e:
@@ -112,9 +132,14 @@ def view(quiz_id):
         cache = None
         if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
             cache = current_app.extensions['cache']
+            logger.info("Cache extension found for quiz view")
+        else:
+            logger.warning("Cache extension not found in current_app.extensions for quiz view")
             
+        cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+        
         if cache and hasattr(cache, 'get'):
-            cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+            logger.info(f"Attempting to get cached quiz data with key: {cache_key}")
             cached_data = cache.get(cache_key)
             if cached_data:
                 logger.info(f"Using cached quiz data for quiz {quiz_id}")
@@ -122,6 +147,8 @@ def view(quiz_id):
                 quiz = deserialize_quiz_data(quiz_data, is_list=False)
                 questions = [Quiz.question_from_dict(q) for q in questions_data]
                 return render_template('quizzes/view.html', quiz=quiz, questions=questions)
+            else:
+                logger.info(f"No cached data found for quiz {quiz_id}")
                 
         # Fetch the quiz directly with Quiz model
         try:
@@ -140,12 +167,14 @@ def view(quiz_id):
             # Cache the results
             if cache and hasattr(cache, 'set'):
                 try:
+                    logger.info(f"Attempting to cache quiz data with key: {cache_key}")
                     quiz_data = serialize_quiz_data(quiz)
                     questions_data = [q.to_dict() for q in questions]
                     cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                     logger.info(f"Cached quiz data for quiz {quiz_id}")
                 except Exception as e:
                     logger.warning(f"Failed to cache quiz data: {e}")
+                    logger.error(f"Cache error details", exc_info=True)
                 
             return render_template('quizzes/view.html', quiz=quiz, questions=questions)
         except Exception as e:

@@ -53,15 +53,46 @@ app.config['DATABASE'] = {
 }
 
 # Redis cache configuration
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = int(os.getenv('REDIS_PORT', 6379))
+redis_password = os.getenv('REDIS_PASSWORD', '')
+redis_db = int(os.getenv('REDIS_DB', 0))
+
+logger.info(f"Redis configuration: host={redis_host}, port={redis_port}, db={redis_db}, password={'set' if redis_password else 'not set'}")
+
 app.config['CACHE_TYPE'] = 'redis'
-app.config['CACHE_REDIS_HOST'] = os.getenv('REDIS_HOST', 'localhost')
-app.config['CACHE_REDIS_PORT'] = int(os.getenv('REDIS_PORT', 6379))
-app.config['CACHE_REDIS_PASSWORD'] = os.getenv('REDIS_PASSWORD', '')
-app.config['CACHE_REDIS_DB'] = int(os.getenv('REDIS_DB', 0))
+app.config['CACHE_REDIS_HOST'] = redis_host
+app.config['CACHE_REDIS_PORT'] = redis_port
+app.config['CACHE_REDIS_PASSWORD'] = redis_password
+app.config['CACHE_REDIS_DB'] = redis_db
 app.config['CACHE_DEFAULT_TIMEOUT'] = 300  # 5 minutes default
+app.config['CACHE_KEY_PREFIX'] = 'badgey_'  # Add prefix to avoid collisions
+app.config['CACHE_OPTIONS'] = {'socket_timeout': 5}  # Increase timeout
 
 # Initialize the Flask-Caching extension
-cache = Cache(app)
+try:
+    cache = Cache(app)
+    logger.info("Flask-Caching extension initialized successfully")
+    
+    # Test if cache is working
+    test_key = 'cache_test'
+    test_value = 'test_value'
+    cache.set(test_key, test_value, timeout=10)
+    retrieved = cache.get(test_key)
+    
+    if retrieved == test_value:
+        logger.info("Redis cache connection test successful")
+    else:
+        logger.warning(f"Redis cache test failed. Expected {test_value}, got {retrieved}")
+except Exception as e:
+    logger.error(f"Error initializing cache: {e}", exc_info=True)
+    # Fallback to simple cache if Redis fails
+    app.config['CACHE_TYPE'] = 'SimpleCache'
+    cache = Cache(app)
+    logger.info("Falling back to SimpleCache due to Redis initialization failure")
+
+# Make cache available to all blueprints
+app.extensions['cache'] = cache
 
 # Session configuration
 # You have two options:

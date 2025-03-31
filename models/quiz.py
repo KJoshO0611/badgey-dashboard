@@ -30,13 +30,33 @@ class Quiz:
     
     def to_dict(self):
         """Convert quiz to dictionary for JSON serialization"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'creator_id': self.creator_id,
-            'creator_username': self.creator_username,
-            'created_at': self.created_at.isoformat() if self.created_at else None
-        }
+        try:
+            created_at_iso = None
+            if self.created_at:
+                try:
+                    created_at_iso = self.created_at.isoformat() 
+                except Exception as e:
+                    # Handle case where created_at might be in an unexpected format
+                    print(f"Error converting created_at to ISO format: {e}")
+                    created_at_iso = str(self.created_at)
+            
+            return {
+                'id': self.id,
+                'name': self.name,
+                'creator_id': self.creator_id,
+                'creator_username': self.creator_username,
+                'created_at': created_at_iso,
+                # Include question_count if it exists
+                'question_count': getattr(self, 'question_count', None)
+            }
+        except Exception as e:
+            print(f"Error in Quiz.to_dict: {e}")
+            # Provide a minimal dict as fallback
+            return {
+                'id': self.id,
+                'name': str(self.name),
+                'creator_id': str(self.creator_id)
+            }
     
     @staticmethod
     def get_by_id(quiz_id):
@@ -138,6 +158,8 @@ class Quiz:
     @staticmethod
     def create(name, creator_id, creator_username=None):
         """Create a new quiz"""
+        from flask import current_app
+        
         conn = get_db()
         with conn.cursor() as cursor:
             # If creator_username is not provided, try to fetch it
@@ -159,6 +181,18 @@ class Quiz:
             # Get the inserted ID
             quiz_id = cursor.lastrowid
             
+            # Invalidate any user's quizzes list cache
+            try:
+                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+                    cache = current_app.extensions['cache']
+                    if cache:
+                        # Clear cache key for this user's quiz list
+                        cache_key = f"quizzes_list_{creator_id}"
+                        cache.delete(cache_key)
+                        print(f"Invalidated cache for key: {cache_key}")
+            except Exception as e:
+                print(f"Error invalidating cache: {e}")
+            
             return Quiz(
                 id=quiz_id,
                 name=name,
@@ -169,6 +203,8 @@ class Quiz:
     
     def update(self, name):
         """Update quiz details"""
+        from flask import current_app
+        
         conn = get_db()
         with conn.cursor() as cursor:
             query = "UPDATE quizzes SET quiz_name = %s WHERE quiz_id = %s"
@@ -178,10 +214,31 @@ class Quiz:
             # Update object property
             self.name = name
             
+            # Invalidate caches
+            try:
+                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+                    cache = current_app.extensions['cache']
+                    if cache:
+                        # Clear user's quiz list cache
+                        cache_key = f"quizzes_list_{self.creator_id}"
+                        cache.delete(cache_key)
+                        print(f"Invalidated creator's quiz list cache: {cache_key}")
+                        
+                        # Clear any view caches for this quiz
+                        # Use a pattern delete if available, otherwise just clear key patterns we know
+                        for pattern in [f"quiz_view_{self.id}_*", f"quiz_preview_{self.id}"]:
+                            if hasattr(cache, 'delete'):
+                                cache.delete(pattern)
+                            print(f"Invalidated quiz cache with pattern: {pattern}")
+            except Exception as e:
+                print(f"Error invalidating cache: {e}")
+            
             return True
     
     def delete(self):
         """Delete quiz and all its questions"""
+        from flask import current_app
+        
         conn = get_db()
         with conn.cursor() as cursor:
             # First delete all questions
@@ -193,6 +250,25 @@ class Quiz:
             cursor.execute(query, (self.id,))
             
             conn.commit()
+            
+            # Invalidate caches
+            try:
+                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+                    cache = current_app.extensions['cache']
+                    if cache:
+                        # Clear user's quiz list cache
+                        cache_key = f"quizzes_list_{self.creator_id}"
+                        cache.delete(cache_key)
+                        print(f"Invalidated creator's quiz list cache: {cache_key}")
+                        
+                        # Clear any view caches for this quiz
+                        for pattern in [f"quiz_view_{self.id}_*", f"quiz_preview_{self.id}"]:
+                            if hasattr(cache, 'delete'):
+                                cache.delete(pattern)
+                            print(f"Invalidated quiz cache with pattern: {pattern}")
+            except Exception as e:
+                print(f"Error invalidating cache: {e}")
+            
             return True
     
     def get_questions(self):
