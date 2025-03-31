@@ -117,11 +117,8 @@ except Exception as e:
     cache = Cache(app)
     logger.info("Falling back to SimpleCache due to Redis initialization failure")
 
-# Make cache available to all blueprints
-app.extensions['cache'] = cache
-
-# Add utility functions to the app context
-app.clear_cache_by_pattern = clear_cache_by_pattern
+# DO NOT add cache to extensions dict - this causes problems with flask-caching internals
+# Just leave it as a module-level variable that can be imported directly
 
 # Session configuration
 # You have two options:

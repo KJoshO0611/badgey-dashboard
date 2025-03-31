@@ -7,6 +7,8 @@ from models.quiz import Quiz, QuizNotFoundError
 from decorators import role_required
 from models.db import get_db
 from flask import current_app
+# Import the cache directly
+from app import cache
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +47,6 @@ def list():
     try:
         logger.info("Fetching quizzes for list view")
         
-        # Get the cache object directly from the app
-        cache = None
-        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-            cache = current_app.extensions['cache']
-            logger.info("Cache extension found")
-        else:
-            logger.warning("Cache extension not found in current_app.extensions")
-            logger.debug(f"Available extensions: {list(current_app.extensions.keys()) if hasattr(current_app, 'extensions') else 'none'}")
-        
         # Get quizzes based on user role - do this first in case cache fails
         if current_user.has_role('admin'):
             logger.info("Admin user: fetching all quizzes")
@@ -66,16 +59,14 @@ def list():
         for quiz in quizzes:
             quiz.question_count = quiz.get_question_count()
         
-        # Try to get quizzes from cache first - with detailed error handling
+        # Try to get quizzes from cache first - with direct cache import
         try:
-            try:
-                # Access the cache directly from current_app
-                from flask_caching import Cache
-                cache_key = f"quizzes_list_{current_user.id}"
-                logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
-                
-                # Access the cache instance directly
-                if cache and isinstance(cache, Cache):
+            cache_key = f"quizzes_list_{current_user.id}"
+            
+            # Check if we can use the imported cache
+            if cache:
+                try:
+                    logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
                     cached_data = cache.get(cache_key)
                     if cached_data:
                         logger.info(f"Using cached quizzes for user {current_user.id}")
@@ -83,20 +74,19 @@ def list():
                         return render_template('quizzes/list.html', quizzes=cached_quizzes)
                     else:
                         logger.info(f"No cached data found for key: {cache_key}")
-            except Exception as cache_get_error:
-                logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
-                
-            # Cache the results for 5 minutes - direct try-except
-            try:
-                if cache and isinstance(cache, Cache):
-                    cache_key = f"quizzes_list_{current_user.id}"
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
+            
+            # Try to cache the results - with direct cache import
+            if cache:
+                try:
                     logger.info(f"Attempting to cache quizzes with key: {cache_key}")
                     serialized_data = serialize_quiz_data(quizzes)
                     cache.set(cache_key, serialized_data, timeout=300)
                     logger.info(f"Cached quizzes for user {current_user.id}")
-            except Exception as cache_set_error:
-                logger.warning(f"Failed to cache quizzes: {cache_set_error}")
-                logger.error("Cache error details", exc_info=True)
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache quizzes: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
         except Exception as cache_error:
             logger.error(f"General caching error: {cache_error}", exc_info=True)
             # Continue with non-cached quizzes
@@ -149,21 +139,13 @@ def view(quiz_id):
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
-        # Check cache with robust error handling
+        # Check cache with direct cache import
         try:
-            # Use a direct try-except approach for cache operations
-            try:
-                # Import the proper type
-                from flask_caching import Cache
-                
-                cache = None
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
-                    logger.info("Cache extension found for quiz view")
-                    
-                cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
-                
-                if cache and isinstance(cache, Cache):
+            cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+            
+            # Try to get from cache
+            if cache:
+                try:
                     logger.info(f"Attempting to get cached quiz data with key: {cache_key}")
                     cached_data = cache.get(cache_key)
                     if cached_data:
@@ -174,27 +156,20 @@ def view(quiz_id):
                         return render_template('quizzes/view.html', quiz=cached_quiz, questions=cached_questions)
                     else:
                         logger.info(f"No cached data found for quiz {quiz_id}")
-            except Exception as cache_get_error:
-                logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
-                
-            # Cache the results
-            try:
-                from flask_caching import Cache
-                
-                cache = None
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
-                
-                if cache and isinstance(cache, Cache):
-                    cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
+            
+            # Try to cache the results
+            if cache:
+                try:
                     logger.info(f"Attempting to cache quiz data with key: {cache_key}")
                     quiz_data = serialize_quiz_data(quiz)
                     questions_data = [q.to_dict() for q in questions]
                     cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                     logger.info(f"Cached quiz data for quiz {quiz_id}")
-            except Exception as cache_set_error:
-                logger.warning(f"Failed to cache quiz data: {cache_set_error}")
-                logger.error("Cache error details", exc_info=True)
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache quiz data: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
         except Exception as cache_error:
             logger.error(f"General caching error: {cache_error}", exc_info=True)
             # Continue with non-cached quiz data
@@ -287,21 +262,13 @@ def preview(quiz_id):
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
-        # Check cache with robust error handling
+        # Check cache with direct cache import
         try:
-            # Use a direct try-except approach for cache operations
-            try:
-                # Import the proper type
-                from flask_caching import Cache
-                
-                cache = None
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
-                    logger.info("Cache extension found for quiz preview")
-                    
-                cache_key = f"quiz_preview_{quiz_id}"
-                
-                if cache and isinstance(cache, Cache):
+            cache_key = f"quiz_preview_{quiz_id}"
+            
+            # Try to get from cache
+            if cache:
+                try:
                     logger.info(f"Attempting to get cached preview data with key: {cache_key}")
                     cached_data = cache.get(cache_key)
                     if cached_data:
@@ -312,27 +279,20 @@ def preview(quiz_id):
                         return render_template('quizzes/preview.html', quiz=cached_quiz, questions=cached_questions)
                     else:
                         logger.info(f"No cached preview data found for quiz {quiz_id}")
-            except Exception as cache_get_error:
-                logger.error(f"Error getting preview data from cache: {cache_get_error}", exc_info=True)
-                
-            # Cache the results
-            try:
-                from flask_caching import Cache
-                
-                cache = None
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
-                
-                if cache and isinstance(cache, Cache):
-                    cache_key = f"quiz_preview_{quiz_id}"
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting preview data from cache: {cache_get_error}", exc_info=True)
+            
+            # Try to cache the results
+            if cache:
+                try:
                     logger.info(f"Attempting to cache preview data with key: {cache_key}")
                     quiz_data = serialize_quiz_data(quiz)
                     questions_data = [q.to_dict() for q in questions]
                     cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                     logger.info(f"Cached preview data for quiz {quiz_id}")
-            except Exception as cache_set_error:
-                logger.warning(f"Failed to cache preview data: {cache_set_error}")
-                logger.error("Cache error details", exc_info=True)
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache preview data: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
         except Exception as cache_error:
             logger.error(f"General caching error in preview: {cache_error}", exc_info=True)
             # Continue with non-cached quiz data

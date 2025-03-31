@@ -159,145 +159,146 @@ class Quiz:
     @staticmethod
     def create(name, creator_id, creator_username=None):
         """Create a new quiz"""
-        from flask import current_app
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # If creator_username is not provided, try to fetch it
-            if creator_username is None:
+        try:
+            # Import cache directly instead of via current_app
+            from app import cache
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            conn = get_db()
+            with conn.cursor() as cursor:
+                # If creator_username is not provided, try to fetch it
+                if creator_username is None:
+                    try:
+                        with conn.cursor() as user_cursor:
+                            user_cursor.execute("SELECT username FROM dashboard_users WHERE discord_id = %s", (creator_id,))
+                            user_data = user_cursor.fetchone()
+                            if user_data:
+                                creator_username = user_data['username']
+                    except Exception as e:
+                        logger.error(f"Error fetching username: {e}")
+                        creator_username = str(creator_id)
+                
+                query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username) VALUES (%s, %s, %s)"
+                cursor.execute(query, (name, creator_id, creator_username))
+                conn.commit()
+                
+                # Get the inserted ID
+                quiz_id = cursor.lastrowid
+                
+                # Invalidate any user's quizzes list cache
                 try:
-                    with conn.cursor() as user_cursor:
-                        user_cursor.execute("SELECT username FROM dashboard_users WHERE discord_id = %s", (creator_id,))
-                        user_data = user_cursor.fetchone()
-                        if user_data:
-                            creator_username = user_data['username']
-                except Exception as e:
-                    logger.error(f"Error fetching username: {e}")
-                    creator_username = str(creator_id)
-            
-            query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username) VALUES (%s, %s, %s)"
-            cursor.execute(query, (name, creator_id, creator_username))
-            conn.commit()
-            
-            # Get the inserted ID
-            quiz_id = cursor.lastrowid
-            
-            # Invalidate any user's quizzes list cache
-            try:
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
                     if cache:
                         # Clear cache key for this user's quiz list
                         cache_key = f"quizzes_list_{creator_id}"
                         cache.delete(cache_key)
                         logger.info(f"Invalidated cache for key: {cache_key}")
-            except Exception as e:
-                logger.error(f"Error invalidating cache: {e}")
-            
-            return Quiz(
-                id=quiz_id,
-                name=name,
-                creator_id=creator_id,
-                created_at=datetime.now(),
-                creator_username=creator_username
-            )
+                except Exception as e:
+                    logger.error(f"Error invalidating cache: {e}")
+                
+                return Quiz(
+                    id=quiz_id,
+                    name=name,
+                    creator_id=creator_id,
+                    created_at=datetime.now(),
+                    creator_username=creator_username
+                )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating quiz: {e}", exc_info=True)
+            raise
     
     def update(self, name):
         """Update quiz details"""
-        from flask import current_app
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        conn = get_db()
-        with conn.cursor() as cursor:
-            query = "UPDATE quizzes SET quiz_name = %s WHERE quiz_id = %s"
-            cursor.execute(query, (name, self.id))
-            conn.commit()
+        try:
+            # Import cache directly instead of via current_app
+            from app import cache
+            import logging
+            logger = logging.getLogger(__name__)
             
-            # Update object property
-            self.name = name
-            
-            # Invalidate caches
-            try:
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
+            conn = get_db()
+            with conn.cursor() as cursor:
+                query = "UPDATE quizzes SET quiz_name = %s WHERE quiz_id = %s"
+                cursor.execute(query, (name, self.id))
+                conn.commit()
+                
+                # Update object property
+                self.name = name
+                
+                # Invalidate caches
+                try:
                     if cache:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
                         cache.delete(cache_key)
                         logger.info(f"Invalidated creator's quiz list cache: {cache_key}")
                         
-                        # Use pattern-based deletion if available
-                        if hasattr(current_app, 'clear_cache_by_pattern'):
-                            # Clear all caches related to this quiz
-                            current_app.clear_cache_by_pattern(cache, f"quiz_view_{self.id}")
-                            current_app.clear_cache_by_pattern(cache, f"quiz_preview_{self.id}")
-                            logger.info(f"Used pattern-based cache invalidation for quiz {self.id}")
-                        else:
-                            # Fallback to specific key deletion
-                            for i in range(1, 10):  # Delete for first few user IDs
-                                view_key = f"quiz_view_{self.id}_{i}"
-                                cache.delete(view_key)
-                            
-                            # Delete preview cache
-                            preview_key = f"quiz_preview_{self.id}"
-                            cache.delete(preview_key)
-                            logger.info(f"Invalidated specific quiz cache keys for quiz {self.id}")
-            except Exception as e:
-                logger.error(f"Error invalidating cache: {e}")
-            
-            return True
+                        # Clear view cache for this quiz for all users (1-10)
+                        for i in range(1, 10):
+                            view_key = f"quiz_view_{self.id}_{i}"
+                            cache.delete(view_key)
+                        
+                        # Clear preview cache
+                        preview_key = f"quiz_preview_{self.id}"
+                        cache.delete(preview_key)
+                        logger.info(f"Invalidated quiz cache keys for quiz {self.id}")
+                except Exception as e:
+                    logger.error(f"Error invalidating cache: {e}")
+                
+                return True
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error updating quiz: {e}", exc_info=True)
+            raise
     
     def delete(self):
         """Delete quiz and all its questions"""
-        from flask import current_app
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        conn = get_db()
-        with conn.cursor() as cursor:
-            # First delete all questions
-            query = "DELETE FROM questions WHERE quiz_id = %s"
-            cursor.execute(query, (self.id,))
+        try:
+            # Import cache directly instead of via current_app
+            from app import cache
+            import logging
+            logger = logging.getLogger(__name__)
             
-            # Then delete the quiz
-            query = "DELETE FROM quizzes WHERE quiz_id = %s"
-            cursor.execute(query, (self.id,))
-            
-            conn.commit()
-            
-            # Invalidate caches
-            try:
-                if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-                    cache = current_app.extensions['cache']
+            conn = get_db()
+            with conn.cursor() as cursor:
+                # First delete all questions
+                query = "DELETE FROM questions WHERE quiz_id = %s"
+                cursor.execute(query, (self.id,))
+                
+                # Then delete the quiz
+                query = "DELETE FROM quizzes WHERE quiz_id = %s"
+                cursor.execute(query, (self.id,))
+                
+                conn.commit()
+                
+                # Invalidate caches
+                try:
                     if cache:
                         # Clear user's quiz list cache
                         cache_key = f"quizzes_list_{self.creator_id}"
                         cache.delete(cache_key)
                         logger.info(f"Invalidated creator's quiz list cache: {cache_key}")
                         
-                        # Use pattern-based deletion if available
-                        if hasattr(current_app, 'clear_cache_by_pattern'):
-                            # Clear all caches related to this quiz
-                            current_app.clear_cache_by_pattern(cache, f"quiz_view_{self.id}")
-                            current_app.clear_cache_by_pattern(cache, f"quiz_preview_{self.id}")
-                            logger.info(f"Used pattern-based cache invalidation for quiz {self.id}")
-                        else:
-                            # Fallback to specific key deletion
-                            for i in range(1, 10):  # Delete for first few user IDs
-                                view_key = f"quiz_view_{self.id}_{i}"
-                                cache.delete(view_key)
-                            
-                            # Delete preview cache
-                            preview_key = f"quiz_preview_{self.id}"
-                            cache.delete(preview_key)
-                            logger.info(f"Invalidated specific quiz cache keys for quiz {self.id}")
-            except Exception as e:
-                logger.error(f"Error invalidating cache: {e}")
-            
-            return True
+                        # Clear view cache for this quiz for all users (1-10)
+                        for i in range(1, 10):
+                            view_key = f"quiz_view_{self.id}_{i}"
+                            cache.delete(view_key)
+                        
+                        # Clear preview cache
+                        preview_key = f"quiz_preview_{self.id}"
+                        cache.delete(preview_key)
+                        logger.info(f"Invalidated quiz cache keys for quiz {self.id}")
+                except Exception as e:
+                    logger.error(f"Error invalidating cache: {e}")
+                
+                return True
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error deleting quiz: {e}", exc_info=True)
+            raise
     
     def get_questions(self):
         """Get all questions for this quiz"""
