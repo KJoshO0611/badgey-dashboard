@@ -205,8 +205,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.checked = false;
             });
             
-            // Reset feedback - forcefully hide all feedback elements
-            forceHideAllFeedback(question);
+            // Reset the feedback elements
+            resetQuestionFeedback(question);
         });
         
         // Reset progress bar
@@ -217,33 +217,33 @@ document.addEventListener('DOMContentLoaded', function() {
         showQuestion(0);
     });
     
-    // Force hide all feedback elements by directly setting style
-    function forceHideAllFeedback(questionSlide) {
+    // Helper function to reset the question feedback
+    function resetQuestionFeedback(questionSlide) {
+        // Find all relevant elements
         const feedbackContainer = questionSlide.querySelector('.feedback-container');
-        if (feedbackContainer) {
-            feedbackContainer.style.display = 'none';
-            
-            // Also hide all child elements
-            Array.from(feedbackContainer.children).forEach(child => {
-                child.style.display = 'none';
-            });
-        }
-        
-        // Force hide correct/incorrect feedback specifically
-        const correctFeedback = questionSlide.querySelector('.correct-feedback');
-        const incorrectFeedback = questionSlide.querySelector('.incorrect-feedback');
-        const explanationBox = questionSlide.querySelector('.explanation-box');
-        
-        if (correctFeedback) correctFeedback.style.display = 'none';
-        if (incorrectFeedback) incorrectFeedback.style.display = 'none';
-        if (explanationBox) explanationBox.style.display = 'none';
-        
-        // Show check button, hide next button
         const checkBtn = questionSlide.querySelector('.check-answer-btn');
         const nextBtn = questionSlide.querySelector('.next-btn');
         
+        // Reset button visibility
         if (checkBtn) checkBtn.style.display = 'block';
         if (nextBtn) nextBtn.style.display = 'none';
+        
+        // Hide feedback container and all its children
+        if (feedbackContainer) {
+            feedbackContainer.style.display = 'none';
+            
+            // Find and hide all alert elements inside the feedback container (correct/incorrect feedback)
+            const alertElements = feedbackContainer.querySelectorAll('.alert');
+            alertElements.forEach(alert => {
+                alert.style.display = 'none';
+            });
+            
+            // Find and hide the explanation box
+            const explanationBox = feedbackContainer.querySelector('.explanation-box');
+            if (explanationBox) {
+                explanationBox.style.display = 'none';
+            }
+        }
     }
     
     // Handle check answer buttons
@@ -252,7 +252,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Check answer button clicked');
             const questionSlide = this.closest('.question-slide');
             const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
-            console.log('Question index:', questionIndex);
             
             // Check if an option is selected
             const selectedOption = questionSlide.querySelector('input[type="radio"]:checked');
@@ -262,87 +261,89 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             console.log('Selected option:', selectedOption.value);
-            console.log('Is correct:', selectedOption.dataset.correct);
+            const isCorrect = selectedOption.dataset.correct === 'true';
+            console.log('Is correct:', isCorrect);
             
-            // Show feedback container
+            // Get the feedback container
             const feedbackContainer = questionSlide.querySelector('.feedback-container');
-            
             if (!feedbackContainer) {
-                console.error('Feedback container not found for question', questionIndex);
+                console.error('Feedback container not found!');
                 return;
             }
             
-            // Make sure feedback container is visible
+            // Make the feedback container visible
             feedbackContainer.style.display = 'block';
             
-            const correctFeedback = questionSlide.querySelector('.correct-feedback');
-            const incorrectFeedback = questionSlide.querySelector('.incorrect-feedback');
-            const explanationBox = questionSlide.querySelector('.explanation-box');
+            // Find all alert elements (feedback messages)
+            const alertElements = feedbackContainer.querySelectorAll('.alert');
+            console.log('Found alert elements:', alertElements.length);
             
-            const isCorrect = selectedOption.dataset.correct === 'true';
+            // Find correct and incorrect feedback elements
+            let correctFeedback = null;
+            let incorrectFeedback = null;
             
-            // Show correct/incorrect feedback
-            if (isCorrect) {
-                console.log('Showing correct feedback');
-                if (correctFeedback) {
-                    correctFeedback.style.display = 'block';
-                    console.log('Correct feedback element:', correctFeedback);
+            alertElements.forEach(alert => {
+                if (alert.classList.contains('alert-success') || 
+                    alert.classList.contains('correct-feedback')) {
+                    correctFeedback = alert;
+                } else if (alert.classList.contains('alert-danger') || 
+                          alert.classList.contains('incorrect-feedback')) {
+                    incorrectFeedback = alert;
                 }
-                if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+            });
+            
+            console.log('Correct feedback element:', correctFeedback);
+            console.log('Incorrect feedback element:', incorrectFeedback);
+            
+            // Show or hide feedback based on correctness
+            if (correctFeedback) {
+                correctFeedback.style.display = isCorrect ? 'block' : 'none';
+            }
+            
+            if (incorrectFeedback) {
+                incorrectFeedback.style.display = isCorrect ? 'none' : 'block';
                 
-                // Only count score the first time a question is answered correctly
-                if (!answeredQuestions[questionIndex]) {
-                    correctCount++;
-                    totalScore += parseInt(questionScores[questionIndex]);
-                }
-            } else {
-                console.log('Showing incorrect feedback');
-                if (correctFeedback) correctFeedback.style.display = 'none';
-                if (incorrectFeedback) {
-                    incorrectFeedback.style.display = 'block';
-                    console.log('Incorrect feedback element:', incorrectFeedback);
-                }
-                
-                // Show which answer was correct
-                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
-                if (correctOption) {
-                    // Get the full label text including the option content
-                    const correctAnswerLabel = correctOption.nextElementSibling;
-                    if (correctAnswerLabel) {
-                        const correctAnswerText = correctAnswerLabel.textContent.trim();
-                        const correctAnswerElement = questionSlide.querySelector('.correct-answer-text');
-                        if (correctAnswerElement) {
-                            correctAnswerElement.textContent = correctAnswerText;
+                // Update correct answer text if answer is incorrect
+                if (!isCorrect) {
+                    const correctOption = questionSlide.querySelector('input[data-correct="true"]');
+                    if (correctOption) {
+                        const correctAnswerLabel = correctOption.nextElementSibling;
+                        if (correctAnswerLabel) {
+                            const correctAnswerText = correctAnswerLabel.textContent.trim();
+                            const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
+                            if (correctAnswerElement) {
+                                correctAnswerElement.textContent = correctAnswerText;
+                            }
                         }
                     }
                 }
             }
             
-            // Show explanation if available
+            // Find and show the explanation box
+            const explanationBox = feedbackContainer.querySelector('.explanation-box');
             if (explanationBox) {
                 explanationBox.style.display = 'block';
                 console.log('Showing explanation box:', explanationBox);
             }
             
-            // Log all feedback element states for debugging
-            console.log('Feedback container display:', feedbackContainer.style.display);
-            if (correctFeedback) console.log('Correct feedback display:', correctFeedback.style.display);
-            if (incorrectFeedback) console.log('Incorrect feedback display:', incorrectFeedback.style.display);
-            if (explanationBox) console.log('Explanation box display:', explanationBox.style.display);
-            
-            // Store the feedback state for this question
+            // Store the state for this question
             answeredQuestions[questionIndex] = {
                 isCorrect: isCorrect,
                 selectedOption: selectedOption.value
             };
             
-            // Show next button, hide check answer button
+            // Count correct answers
+            if (isCorrect && !answeredQuestions[questionIndex].counted) {
+                correctCount++;
+                totalScore += parseInt(questionScores[questionIndex]);
+                answeredQuestions[questionIndex].counted = true;
+            }
+            
+            // Hide check button, show next button
             this.style.display = 'none';
             const nextBtn = questionSlide.querySelector('.next-btn');
             if (nextBtn) {
                 nextBtn.style.display = 'block';
-            } else {
-                console.error('Next button not found in question slide');
             }
         });
     });
@@ -388,72 +389,79 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentSlide = questionSlides[index];
         currentSlide.style.display = 'block';
         
-        // Force reset all feedback elements in this question
-        forceHideAllFeedback(currentSlide);
+        // Reset feedback state for this question if not answered
+        if (!answeredQuestions[index]) {
+            resetQuestionFeedback(currentSlide);
+        } else {
+            // Restore previous answer state
+            restorePreviousAnswerState(currentSlide, index);
+        }
         
-        // If this question has been answered, restore its state
-        if (answeredQuestions[index]) {
-            console.log('Question already answered, restoring state');
-            const selectedOptionValue = answeredQuestions[index].selectedOption;
-            const isCorrect = answeredQuestions[index].isCorrect;
+        // Update progress bar
+        updateProgress(index);
+    }
+    
+    // Restore the previous answer state for an answered question
+    function restorePreviousAnswerState(questionSlide, index) {
+        const answerData = answeredQuestions[index];
+        if (!answerData) return;
+        
+        // Re-check the previously selected radio button
+        const selectedOption = questionSlide.querySelector(`input[value="${answerData.selectedOption}"]`);
+        if (selectedOption) {
+            selectedOption.checked = true;
+        }
+        
+        // Get the feedback container
+        const feedbackContainer = questionSlide.querySelector('.feedback-container');
+        if (!feedbackContainer) return;
+        
+        // Show the feedback container
+        feedbackContainer.style.display = 'block';
+        
+        // Find correct and incorrect feedback elements
+        const correctFeedback = feedbackContainer.querySelector('.alert-success') || 
+                               feedbackContainer.querySelector('.correct-feedback');
+                               
+        const incorrectFeedback = feedbackContainer.querySelector('.alert-danger') || 
+                                 feedbackContainer.querySelector('.incorrect-feedback');
+        
+        // Show/hide feedback based on correctness
+        if (correctFeedback) {
+            correctFeedback.style.display = answerData.isCorrect ? 'block' : 'none';
+        }
+        
+        if (incorrectFeedback) {
+            incorrectFeedback.style.display = answerData.isCorrect ? 'none' : 'block';
             
-            // Check the radio button
-            if (selectedOptionValue) {
-                const selectedOption = currentSlide.querySelector(`input[value="${selectedOptionValue}"]`);
-                if (selectedOption) {
-                    selectedOption.checked = true;
-                }
-            }
-            
-            // Show feedback container
-            const feedbackContainer = currentSlide.querySelector('.feedback-container');
-            if (feedbackContainer) {
-                feedbackContainer.style.display = 'block';
-            }
-            
-            // Show correct feedback only
-            const correctFeedback = currentSlide.querySelector('.correct-feedback');
-            const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
-            const explanationBox = currentSlide.querySelector('.explanation-box');
-            
-            if (isCorrect) {
-                if (correctFeedback) correctFeedback.style.display = 'block';
-                if (incorrectFeedback) incorrectFeedback.style.display = 'none';
-            } else {
-                if (correctFeedback) correctFeedback.style.display = 'none';
-                if (incorrectFeedback) incorrectFeedback.style.display = 'block';
-                
-                // Show correct answer text
-                const correctOption = currentSlide.querySelector('input[data-correct="true"]');
+            // Update correct answer text if answer was incorrect
+            if (!answerData.isCorrect) {
+                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
                 if (correctOption) {
                     const correctAnswerLabel = correctOption.nextElementSibling;
                     if (correctAnswerLabel) {
                         const correctAnswerText = correctAnswerLabel.textContent.trim();
-                        const correctAnswerElement = currentSlide.querySelector('.correct-answer-text');
+                        const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
                         if (correctAnswerElement) {
                             correctAnswerElement.textContent = correctAnswerText;
                         }
                     }
                 }
             }
-            
-            // Show explanation
-            if (explanationBox) {
-                explanationBox.style.display = 'block';
-            }
-            
-            // Hide check button, show next button
-            const checkBtn = currentSlide.querySelector('.check-answer-btn');
-            const nextBtn = currentSlide.querySelector('.next-btn');
-            
-            if (checkBtn) checkBtn.style.display = 'none';
-            if (nextBtn) nextBtn.style.display = 'block';
-        } else {
-            console.log('New question, resetting feedback');
         }
         
-        // Update progress bar
-        updateProgress(index);
+        // Show the explanation box
+        const explanationBox = feedbackContainer.querySelector('.explanation-box');
+        if (explanationBox) {
+            explanationBox.style.display = 'block';
+        }
+        
+        // Hide check button, show next button
+        const checkBtn = questionSlide.querySelector('.check-answer-btn');
+        const nextBtn = questionSlide.querySelector('.next-btn');
+        
+        if (checkBtn) checkBtn.style.display = 'none';
+        if (nextBtn) nextBtn.style.display = 'block';
     }
     
     // Function to update progress bar
@@ -485,8 +493,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show results slide
         if (resultsSlide) {
             resultsSlide.style.display = 'block';
-        } else {
-            console.error('Results slide not found');
         }
         
         // Update progress to 100%
