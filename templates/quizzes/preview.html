@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.checked = false;
             });
             
-            // Reset the feedback elements
+            // Reset feedback
             resetQuestionFeedback(question);
         });
         
@@ -216,34 +216,67 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsSlide.style.display = 'none';
         showQuestion(0);
     });
+
+    // Helper function to log the DOM structure
+    function logDOMStructure(element, indent = 0) {
+        if (!element) return;
+        
+        const padding = ' '.repeat(indent * 2);
+        console.log(`${padding}${element.tagName || 'TEXT'}: ${element.className || ''}`);
+        
+        if (element.children && element.children.length > 0) {
+            Array.from(element.children).forEach(child => {
+                logDOMStructure(child, indent + 1);
+            });
+        }
+    }
     
     // Helper function to reset the question feedback
     function resetQuestionFeedback(questionSlide) {
-        // Find all relevant elements
+        // Find feedback container
         const feedbackContainer = questionSlide.querySelector('.feedback-container');
+        if (!feedbackContainer) return;
+        
+        // Hide feedback container
+        feedbackContainer.style.display = 'none';
+        
+        // Find explanation box and hide it
+        const explanationBox = questionSlide.querySelector('.explanation-box');
+        if (explanationBox) {
+            explanationBox.style.display = 'none';
+        }
+        
+        // Reset buttons
         const checkBtn = questionSlide.querySelector('.check-answer-btn');
         const nextBtn = questionSlide.querySelector('.next-btn');
         
-        // Reset button visibility
         if (checkBtn) checkBtn.style.display = 'block';
         if (nextBtn) nextBtn.style.display = 'none';
         
-        // Hide feedback container and all its children
-        if (feedbackContainer) {
-            feedbackContainer.style.display = 'none';
-            
-            // Find and hide all alert elements inside the feedback container (correct/incorrect feedback)
-            const alertElements = feedbackContainer.querySelectorAll('.alert');
-            alertElements.forEach(alert => {
-                alert.style.display = 'none';
-            });
-            
-            // Find and hide the explanation box
-            const explanationBox = feedbackContainer.querySelector('.explanation-box');
-            if (explanationBox) {
-                explanationBox.style.display = 'none';
-            }
+        // Remove any dynamically added feedback elements
+        const correctFeedback = questionSlide.querySelector('.dynamic-correct-feedback');
+        const incorrectFeedback = questionSlide.querySelector('.dynamic-incorrect-feedback');
+        
+        if (correctFeedback) correctFeedback.remove();
+        if (incorrectFeedback) incorrectFeedback.remove();
+    }
+    
+    // Helper function to create feedback elements if they don't exist
+    function createFeedbackElement(container, isCorrect) {
+        // Create a new alert div
+        const feedbackDiv = document.createElement('div');
+        
+        if (isCorrect) {
+            feedbackDiv.className = 'alert alert-success dynamic-correct-feedback';
+            feedbackDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i> Correct!';
+        } else {
+            feedbackDiv.className = 'alert alert-danger dynamic-incorrect-feedback';
+            feedbackDiv.innerHTML = '<i class="fas fa-times-circle me-2"></i> Incorrect. The correct answer is: <span class="correct-answer-text"></span>';
         }
+        
+        // Add it to the feedback container
+        container.insertBefore(feedbackDiv, container.firstChild);
+        return feedbackDiv;
     }
     
     // Handle check answer buttons
@@ -274,65 +307,55 @@ document.addEventListener('DOMContentLoaded', function() {
             // Make the feedback container visible
             feedbackContainer.style.display = 'block';
             
-            // Find all alert elements (feedback messages)
-            const alertElements = feedbackContainer.querySelectorAll('.alert');
-            console.log('Found alert elements:', alertElements.length);
+            // Log the feedback container structure
+            console.log('Feedback container structure:');
+            logDOMStructure(feedbackContainer);
             
-            // Find correct and incorrect feedback elements
-            let correctFeedback = null;
-            let incorrectFeedback = null;
+            // Remove any existing dynamic feedback
+            const existingCorrectFeedback = questionSlide.querySelector('.dynamic-correct-feedback');
+            const existingIncorrectFeedback = questionSlide.querySelector('.dynamic-incorrect-feedback');
             
-            alertElements.forEach(alert => {
-                if (alert.classList.contains('alert-success') || 
-                    alert.classList.contains('correct-feedback')) {
-                    correctFeedback = alert;
-                } else if (alert.classList.contains('alert-danger') || 
-                          alert.classList.contains('incorrect-feedback')) {
-                    incorrectFeedback = alert;
-                }
-            });
+            if (existingCorrectFeedback) existingCorrectFeedback.remove();
+            if (existingIncorrectFeedback) existingIncorrectFeedback.remove();
             
-            console.log('Correct feedback element:', correctFeedback);
-            console.log('Incorrect feedback element:', incorrectFeedback);
-            
-            // Show or hide feedback based on correctness
-            if (correctFeedback) {
-                correctFeedback.style.display = isCorrect ? 'block' : 'none';
-            }
-            
-            if (incorrectFeedback) {
-                incorrectFeedback.style.display = isCorrect ? 'none' : 'block';
+            // Create and show appropriate feedback
+            if (isCorrect) {
+                const correctFeedback = createFeedbackElement(feedbackContainer, true);
+                correctFeedback.style.display = 'block';
+                console.log('Created and showing correct feedback');
+            } else {
+                const incorrectFeedback = createFeedbackElement(feedbackContainer, false);
+                incorrectFeedback.style.display = 'block';
+                console.log('Created and showing incorrect feedback');
                 
-                // Update correct answer text if answer is incorrect
-                if (!isCorrect) {
-                    const correctOption = questionSlide.querySelector('input[data-correct="true"]');
-                    if (correctOption) {
-                        const correctAnswerLabel = correctOption.nextElementSibling;
-                        if (correctAnswerLabel) {
-                            const correctAnswerText = correctAnswerLabel.textContent.trim();
-                            const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
-                            if (correctAnswerElement) {
-                                correctAnswerElement.textContent = correctAnswerText;
-                            }
+                // Find and show the correct answer
+                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
+                if (correctOption) {
+                    const correctAnswerLabel = correctOption.nextElementSibling;
+                    if (correctAnswerLabel) {
+                        const correctAnswerText = correctAnswerLabel.textContent.trim();
+                        const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
+                        if (correctAnswerElement) {
+                            correctAnswerElement.textContent = correctAnswerText;
                         }
                     }
                 }
             }
             
-            // Find and show the explanation box
+            // Show the explanation box
             const explanationBox = feedbackContainer.querySelector('.explanation-box');
             if (explanationBox) {
                 explanationBox.style.display = 'block';
                 console.log('Showing explanation box:', explanationBox);
             }
             
-            // Store the state for this question
+            // Store answer state
             answeredQuestions[questionIndex] = {
                 isCorrect: isCorrect,
                 selectedOption: selectedOption.value
             };
             
-            // Count correct answers
+            // Count correct answers (only once per question)
             if (isCorrect && !answeredQuestions[questionIndex].counted) {
                 correctCount++;
                 totalScore += parseInt(questionScores[questionIndex]);
@@ -389,24 +412,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentSlide = questionSlides[index];
         currentSlide.style.display = 'block';
         
-        // Reset feedback state for this question if not answered
+        // Reset feedback for new questions or restore state for answered ones
         if (!answeredQuestions[index]) {
             resetQuestionFeedback(currentSlide);
         } else {
-            // Restore previous answer state
-            restorePreviousAnswerState(currentSlide, index);
+            restoreQuestionState(currentSlide, index);
         }
         
         // Update progress bar
         updateProgress(index);
     }
     
-    // Restore the previous answer state for an answered question
-    function restorePreviousAnswerState(questionSlide, index) {
+    // Function to restore previous answer state
+    function restoreQuestionState(questionSlide, index) {
         const answerData = answeredQuestions[index];
         if (!answerData) return;
         
-        // Re-check the previously selected radio button
+        // Check the previously selected radio button
         const selectedOption = questionSlide.querySelector(`input[value="${answerData.selectedOption}"]`);
         if (selectedOption) {
             selectedOption.checked = true;
@@ -419,32 +441,30 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show the feedback container
         feedbackContainer.style.display = 'block';
         
-        // Find correct and incorrect feedback elements
-        const correctFeedback = feedbackContainer.querySelector('.alert-success') || 
-                               feedbackContainer.querySelector('.correct-feedback');
-                               
-        const incorrectFeedback = feedbackContainer.querySelector('.alert-danger') || 
-                                 feedbackContainer.querySelector('.incorrect-feedback');
+        // Remove any existing dynamic feedback
+        const existingCorrectFeedback = questionSlide.querySelector('.dynamic-correct-feedback');
+        const existingIncorrectFeedback = questionSlide.querySelector('.dynamic-incorrect-feedback');
         
-        // Show/hide feedback based on correctness
-        if (correctFeedback) {
-            correctFeedback.style.display = answerData.isCorrect ? 'block' : 'none';
-        }
+        if (existingCorrectFeedback) existingCorrectFeedback.remove();
+        if (existingIncorrectFeedback) existingIncorrectFeedback.remove();
         
-        if (incorrectFeedback) {
-            incorrectFeedback.style.display = answerData.isCorrect ? 'none' : 'block';
+        // Create and show appropriate feedback
+        if (answerData.isCorrect) {
+            const correctFeedback = createFeedbackElement(feedbackContainer, true);
+            correctFeedback.style.display = 'block';
+        } else {
+            const incorrectFeedback = createFeedbackElement(feedbackContainer, false);
+            incorrectFeedback.style.display = 'block';
             
-            // Update correct answer text if answer was incorrect
-            if (!answerData.isCorrect) {
-                const correctOption = questionSlide.querySelector('input[data-correct="true"]');
-                if (correctOption) {
-                    const correctAnswerLabel = correctOption.nextElementSibling;
-                    if (correctAnswerLabel) {
-                        const correctAnswerText = correctAnswerLabel.textContent.trim();
-                        const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
-                        if (correctAnswerElement) {
-                            correctAnswerElement.textContent = correctAnswerText;
-                        }
+            // Find and show the correct answer
+            const correctOption = questionSlide.querySelector('input[data-correct="true"]');
+            if (correctOption) {
+                const correctAnswerLabel = correctOption.nextElementSibling;
+                if (correctAnswerLabel) {
+                    const correctAnswerText = correctAnswerLabel.textContent.trim();
+                    const correctAnswerElement = incorrectFeedback.querySelector('.correct-answer-text');
+                    if (correctAnswerElement) {
+                        correctAnswerElement.textContent = correctAnswerText;
                     }
                 }
             }
