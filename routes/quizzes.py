@@ -54,23 +54,7 @@ def list():
             logger.warning("Cache extension not found in current_app.extensions")
             logger.debug(f"Available extensions: {list(current_app.extensions.keys()) if hasattr(current_app, 'extensions') else 'none'}")
         
-        # Try to get quizzes from cache first
-        cached_quizzes = None
-        cache_key = f"quizzes_list_{current_user.id}"
-        
-        if cache and hasattr(cache, 'get'):
-            logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                logger.info(f"Using cached quizzes for user {current_user.id}")
-                quizzes = deserialize_quiz_data(cached_data)
-                return render_template('quizzes/list.html', quizzes=quizzes)
-            else:
-                logger.info(f"No cached data found for key: {cache_key}")
-        else:
-            logger.warning("Cache object not available or doesn't have get method")
-        
-        # Get quizzes based on user role
+        # Get quizzes based on user role - do this first in case cache fails
         if current_user.has_role('admin'):
             logger.info("Admin user: fetching all quizzes")
             quizzes = Quiz.get_all()
@@ -82,20 +66,41 @@ def list():
         for quiz in quizzes:
             quiz.question_count = quiz.get_question_count()
         
-        # Cache the results for 5 minutes
-        if cache and hasattr(cache, 'set'):
-            try:
-                logger.info(f"Attempting to cache quizzes with key: {cache_key}")
-                serialized_data = serialize_quiz_data(quizzes)
-                cache.set(cache_key, serialized_data, timeout=300)
-                logger.info(f"Cached quizzes for user {current_user.id}")
-            except Exception as e:
-                logger.warning(f"Failed to cache quizzes: {e}")
-                logger.error(f"Cache error details", exc_info=True)
+        # Try to get quizzes from cache first - with detailed error handling
+        try:
+            cache_key = f"quizzes_list_{current_user.id}"
+            if cache and hasattr(cache, 'get'):
+                logger.info(f"Attempting to get cached quizzes with key: {cache_key}")
+                try:
+                    cached_data = cache.get(cache_key)
+                    if cached_data:
+                        logger.info(f"Using cached quizzes for user {current_user.id}")
+                        cached_quizzes = deserialize_quiz_data(cached_data)
+                        return render_template('quizzes/list.html', quizzes=cached_quizzes)
+                    else:
+                        logger.info(f"No cached data found for key: {cache_key}")
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
+            else:
+                logger.warning("Cache object not available or doesn't have get method")
+                
+            # Cache the results for 5 minutes
+            if cache and hasattr(cache, 'set'):
+                try:
+                    logger.info(f"Attempting to cache quizzes with key: {cache_key}")
+                    serialized_data = serialize_quiz_data(quizzes)
+                    cache.set(cache_key, serialized_data, timeout=300)
+                    logger.info(f"Cached quizzes for user {current_user.id}")
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache quizzes: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
+        except Exception as cache_error:
+            logger.error(f"General caching error: {cache_error}", exc_info=True)
+            # Continue with non-cached quizzes
         
         return render_template('quizzes/list.html', quizzes=quizzes)
     except Exception as e:
-        logger.error(f"Error listing quizzes: {e}")
+        logger.error(f"Error listing quizzes: {e}", exc_info=True)
         flash("An error occurred while retrieving quizzes.", "danger")
         return render_template('quizzes/list.html', quizzes=[])
 
@@ -128,42 +133,45 @@ def create():
 def view(quiz_id):
     """View a specific quiz."""
     try:
-        # Check cache first
-        cache = None
-        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-            cache = current_app.extensions['cache']
-            logger.info("Cache extension found for quiz view")
-        else:
-            logger.warning("Cache extension not found in current_app.extensions for quiz view")
-            
-        cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
+        # Fetch the quiz directly first to ensure we have a fallback
+        logger.info(f"Fetching quiz with ID {quiz_id} for viewing")
+        quiz = Quiz.get_by_id(quiz_id)
         
-        if cache and hasattr(cache, 'get'):
-            logger.info(f"Attempting to get cached quiz data with key: {cache_key}")
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                logger.info(f"Using cached quiz data for quiz {quiz_id}")
-                quiz_data, questions_data = cached_data
-                quiz = deserialize_quiz_data(quiz_data, is_list=False)
-                questions = [Quiz.question_from_dict(q) for q in questions_data]
-                return render_template('quizzes/view.html', quiz=quiz, questions=questions)
-            else:
-                logger.info(f"No cached data found for quiz {quiz_id}")
-                
-        # Fetch the quiz directly with Quiz model
+        # Check if user has permission to view this quiz
+        if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
+            logger.warning(f"User {current_user.discord_id} attempted to view quiz {quiz_id} without permission")
+            flash("You don't have permission to view this quiz.", "danger")
+            return redirect(url_for('quizzes.list'))
+        
+        logger.info(f"Fetching questions for quiz {quiz_id}")
+        questions = quiz.get_questions()
+        
+        # Check cache with robust error handling
         try:
-            logger.info(f"Fetching quiz with ID {quiz_id} for viewing")
-            quiz = Quiz.get_by_id(quiz_id)
+            cache = None
+            if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+                cache = current_app.extensions['cache']
+                logger.info("Cache extension found for quiz view")
+            else:
+                logger.warning("Cache extension not found in current_app.extensions for quiz view")
+                
+            cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
             
-            # Check if user has permission to view this quiz
-            if not current_user.has_role('admin') and quiz.creator_id != current_user.discord_id:
-                logger.warning(f"User {current_user.discord_id} attempted to view quiz {quiz_id} without permission")
-                flash("You don't have permission to view this quiz.", "danger")
-                return redirect(url_for('quizzes.list'))
-            
-            logger.info(f"Fetching questions for quiz {quiz_id}")
-            questions = quiz.get_questions()
-            
+            if cache and hasattr(cache, 'get'):
+                try:
+                    logger.info(f"Attempting to get cached quiz data with key: {cache_key}")
+                    cached_data = cache.get(cache_key)
+                    if cached_data:
+                        logger.info(f"Using cached quiz data for quiz {quiz_id}")
+                        quiz_data, questions_data = cached_data
+                        cached_quiz = deserialize_quiz_data(quiz_data, is_list=False)
+                        cached_questions = [Quiz.question_from_dict(q) for q in questions_data]
+                        return render_template('quizzes/view.html', quiz=cached_quiz, questions=cached_questions)
+                    else:
+                        logger.info(f"No cached data found for quiz {quiz_id}")
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting data from cache: {cache_get_error}", exc_info=True)
+                    
             # Cache the results
             if cache and hasattr(cache, 'set'):
                 try:
@@ -172,17 +180,16 @@ def view(quiz_id):
                     questions_data = [q.to_dict() for q in questions]
                     cache.set(cache_key, (quiz_data, questions_data), timeout=300)
                     logger.info(f"Cached quiz data for quiz {quiz_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to cache quiz data: {e}")
-                    logger.error(f"Cache error details", exc_info=True)
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache quiz data: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
+        except Exception as cache_error:
+            logger.error(f"General caching error: {cache_error}", exc_info=True)
+            # Continue with non-cached quiz data
                 
-            return render_template('quizzes/view.html', quiz=quiz, questions=questions)
-        except Exception as e:
-            logger.error(f"Error viewing quiz with model approach: {e}")
-            # Fallback to direct database query
-            raise e
+        return render_template('quizzes/view.html', quiz=quiz, questions=questions)
     except Exception as e:
-        logger.error(f"Error viewing quiz: {e}")
+        logger.error(f"Error viewing quiz: {e}", exc_info=True)
         flash("An error occurred while retrieving the quiz.", "danger")
         return redirect(url_for('quizzes.list'))
 
@@ -261,37 +268,53 @@ def delete(quiz_id):
 def preview(quiz_id):
     """Preview how the quiz will appear to users"""
     try:
-        # Check cache first
-        cache = None
-        if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
-            cache = current_app.extensions['cache']
-            
-        if cache and hasattr(cache, 'get'):
-            cache_key = f"quiz_preview_{quiz_id}"
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                logger.info(f"Using cached preview data for quiz {quiz_id}")
-                quiz_data, questions_data = cached_data
-                quiz = deserialize_quiz_data(quiz_data, is_list=False)
-                questions = [Quiz.question_from_dict(q) for q in questions_data]
-                return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
-        
-        # Add detailed logging
+        # Fetch quiz data directly first as fallback
         logger.info(f"Fetching quiz with ID {quiz_id} for preview")
         quiz = Quiz.get_by_id(quiz_id)
         
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
-        # Cache the results
-        if cache and hasattr(cache, 'set'):
-            try:
-                quiz_data = serialize_quiz_data(quiz)
-                questions_data = [q.to_dict() for q in questions]
-                cache.set(cache_key, (quiz_data, questions_data), timeout=300)
-                logger.info(f"Cached preview data for quiz {quiz_id}")
-            except Exception as e:
-                logger.warning(f"Failed to cache preview data: {e}")
+        # Check cache with robust error handling
+        try:
+            cache = None
+            if hasattr(current_app, 'extensions') and 'cache' in current_app.extensions:
+                cache = current_app.extensions['cache']
+                logger.info("Cache extension found for quiz preview")
+            else:
+                logger.warning("Cache extension not found in current_app.extensions for quiz preview")
+                
+            cache_key = f"quiz_preview_{quiz_id}"
+            
+            if cache and hasattr(cache, 'get'):
+                try:
+                    logger.info(f"Attempting to get cached preview data with key: {cache_key}")
+                    cached_data = cache.get(cache_key)
+                    if cached_data:
+                        logger.info(f"Using cached preview data for quiz {quiz_id}")
+                        quiz_data, questions_data = cached_data
+                        cached_quiz = deserialize_quiz_data(quiz_data, is_list=False)
+                        cached_questions = [Quiz.question_from_dict(q) for q in questions_data]
+                        return render_template('quizzes/preview.html', quiz=cached_quiz, questions=cached_questions)
+                    else:
+                        logger.info(f"No cached preview data found for quiz {quiz_id}")
+                except Exception as cache_get_error:
+                    logger.error(f"Error getting preview data from cache: {cache_get_error}", exc_info=True)
+                    
+            # Cache the results
+            if cache and hasattr(cache, 'set'):
+                try:
+                    logger.info(f"Attempting to cache preview data with key: {cache_key}")
+                    quiz_data = serialize_quiz_data(quiz)
+                    questions_data = [q.to_dict() for q in questions]
+                    cache.set(cache_key, (quiz_data, questions_data), timeout=300)
+                    logger.info(f"Cached preview data for quiz {quiz_id}")
+                except Exception as cache_set_error:
+                    logger.warning(f"Failed to cache preview data: {cache_set_error}")
+                    logger.error("Cache error details", exc_info=True)
+        except Exception as cache_error:
+            logger.error(f"General caching error in preview: {cache_error}", exc_info=True)
+            # Continue with non-cached quiz data
         
         return render_template('quizzes/preview.html', quiz=quiz, questions=questions)
     
@@ -300,7 +323,7 @@ def preview(quiz_id):
         flash('Quiz not found', 'error')
         return redirect(url_for('quizzes.list'))
     except Exception as e:
-        logger.error(f"Error previewing quiz {quiz_id}: {e}")
+        logger.error(f"Error previewing quiz {quiz_id}: {e}", exc_info=True)
         flash(f"An error occurred while previewing the quiz: {str(e)}", "danger")
         return redirect(url_for('quizzes.list'))
 
