@@ -157,21 +157,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const quizDataElement = document.getElementById('quiz-data');
     const quizData = JSON.parse(quizDataElement.textContent);
     
-    // Debug: Check if data-correct attributes are set correctly
-    document.querySelectorAll('.question-slide').forEach((slide, idx) => {
-        console.log(`Question ${idx+1} correct answer check:`);
-        const options = slide.querySelectorAll('input[type="radio"]');
-        options.forEach(option => {
-            console.log(`Option ${option.value}: data-correct=${option.dataset.correct}`);
-        });
-        
-        // Make sure at least one option is marked as correct
-        const correctOption = slide.querySelector('input[data-correct="true"]');
-        if (!correctOption) {
-            console.error(`Question ${idx+1} has no correct answer marked!`);
-        }
-    });
-    
     // Initialize UI elements
     const quizIntro = document.getElementById('quizIntro');
     const quizContent = document.getElementById('quizContent');
@@ -220,28 +205,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.checked = false;
             });
             
-            // Hide feedback and reset feedback components
-            const feedback = question.querySelector('.feedback-container');
-            if (feedback) {
-                feedback.style.display = 'none';
-                
-                // Also reset the individual feedback elements
-                const correctFeedback = question.querySelector('.correct-feedback');
-                const incorrectFeedback = question.querySelector('.incorrect-feedback');
-                const explanationBox = question.querySelector('.explanation-box');
-                
-                if (correctFeedback) correctFeedback.style.display = 'none';
-                if (incorrectFeedback) incorrectFeedback.style.display = 'none';
-                if (explanationBox) explanationBox.style.display = 'none';
-            }
-            
-            // Show check answer button, hide next button
-            const checkBtn = question.querySelector('.check-answer-btn');
-            const nextBtn = question.querySelector('.next-btn');
-            if (checkBtn && nextBtn) {
-                checkBtn.style.display = 'block';
-                nextBtn.style.display = 'none';
-            }
+            // Reset feedback containers and buttons
+            resetFeedback(question);
         });
         
         // Reset progress bar
@@ -251,6 +216,23 @@ document.addEventListener('DOMContentLoaded', function() {
         resultsSlide.style.display = 'none';
         showQuestion(0);
     });
+    
+    // Helper function to reset feedback elements
+    function resetFeedback(questionSlide) {
+        const feedbackContainer = questionSlide.querySelector('.feedback-container');
+        const checkBtn = questionSlide.querySelector('.check-answer-btn');
+        const nextBtn = questionSlide.querySelector('.next-btn');
+        const correctFeedback = questionSlide.querySelector('.correct-feedback');
+        const incorrectFeedback = questionSlide.querySelector('.incorrect-feedback');
+        const explanationBox = questionSlide.querySelector('.explanation-box');
+        
+        if (feedbackContainer) feedbackContainer.style.display = 'none';
+        if (checkBtn) checkBtn.style.display = 'block';
+        if (nextBtn) nextBtn.style.display = 'none';
+        if (correctFeedback) correctFeedback.style.display = 'none';
+        if (incorrectFeedback) incorrectFeedback.style.display = 'none';
+        if (explanationBox) explanationBox.style.display = 'none';
+    }
     
     // Handle check answer buttons
     document.querySelectorAll('.check-answer-btn').forEach(btn => {
@@ -312,10 +294,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (correctAnswerElement) {
                             correctAnswerElement.textContent = correctAnswerText;
                         }
-                        
-                        // Debug to verify the correct answer is properly identified
-                        console.log('Correct option letter:', correctOption.value);
-                        console.log('Correct option text:', correctAnswerText);
                     }
                 }
             }
@@ -352,8 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show next question or results if last question
             if (questionIndex < totalQuestions - 1) {
-                // We don't need to clear feedback when moving to the next question
-                // The feedback will be properly managed by the showQuestion function
                 showQuestion(questionIndex + 1);
             } else {
                 showResults();
@@ -368,16 +344,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const questionIndex = Array.from(questionSlides).indexOf(questionSlide);
             
             if (questionIndex > 0) {
-                showQuestion(questionIndex - 1, true);
+                showQuestion(questionIndex - 1);
             }
         });
     });
     
     // Function to show a specific question
-    function showQuestion(index, keepFeedback = false) {
+    function showQuestion(index) {
         currentQuestion = index;
         
-        // Hide all questions
+        // Hide all questions first
         questionSlides.forEach(question => {
             question.style.display = 'none';
         });
@@ -386,32 +362,31 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentSlide = questionSlides[index];
         currentSlide.style.display = 'block';
         
-        // Get references to feedback elements
+        // Get references to all UI elements we need to manipulate
         const feedbackContainer = currentSlide.querySelector('.feedback-container');
         const checkBtn = currentSlide.querySelector('.check-answer-btn');
         const nextBtn = currentSlide.querySelector('.next-btn');
-        const explanationBox = currentSlide.querySelector('.explanation-box');
         const correctFeedback = currentSlide.querySelector('.correct-feedback');
         const incorrectFeedback = currentSlide.querySelector('.incorrect-feedback');
+        const explanationBox = currentSlide.querySelector('.explanation-box');
         
-        // Check if this question has been answered
+        // Check if this question has been answered before
         if (answeredQuestions[index]) {
-            // This question has been answered before, restore its state
-            
-            // Make sure the correct radio button is checked
-            if (answeredQuestions[index].selectedOption) {
-                const selectedOption = currentSlide.querySelector(`input[value="${answeredQuestions[index].selectedOption}"]`);
-                if (selectedOption) selectedOption.checked = true;
+            // Restore previous answer state
+            const selectedOptionValue = answeredQuestions[index].selectedOption;
+            if (selectedOptionValue) {
+                const selectedOption = currentSlide.querySelector(`input[value="${selectedOptionValue}"]`);
+                if (selectedOption) {
+                    selectedOption.checked = true;
+                }
             }
             
-            // Make the feedback visible again
-            if (feedbackContainer) feedbackContainer.style.display = 'block';
+            // Show feedback container
+            if (feedbackContainer) {
+                feedbackContainer.style.display = 'block';
+            }
             
-            // Hide check button and show next button
-            if (checkBtn) checkBtn.style.display = 'none';
-            if (nextBtn) nextBtn.style.display = 'block';
-            
-            // Show the correct feedback based on whether answer was correct
+            // Show appropriate feedback messages
             if (answeredQuestions[index].isCorrect) {
                 if (correctFeedback) correctFeedback.style.display = 'block';
                 if (incorrectFeedback) incorrectFeedback.style.display = 'none';
@@ -419,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (correctFeedback) correctFeedback.style.display = 'none';
                 if (incorrectFeedback) incorrectFeedback.style.display = 'block';
                 
-                // Show which answer was correct
+                // Ensure correct answer text is displayed
                 const correctOption = currentSlide.querySelector('input[data-correct="true"]');
                 if (correctOption) {
                     const correctAnswerLabel = correctOption.nextElementSibling;
@@ -434,23 +409,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // Show explanation if available
-            if (explanationBox) explanationBox.style.display = 'block';
+            if (explanationBox) {
+                explanationBox.style.display = 'block';
+            }
+            
+            // Hide Check Answer button, show Next button
+            if (checkBtn) checkBtn.style.display = 'none';
+            if (nextBtn) nextBtn.style.display = 'block';
         } else {
-            // This question hasn't been answered yet, hide all feedback elements
-            if (feedbackContainer) feedbackContainer.style.display = 'none';
-            if (correctFeedback) correctFeedback.style.display = 'none';
-            if (incorrectFeedback) incorrectFeedback.style.display = 'none';
-            if (explanationBox) explanationBox.style.display = 'none';
-            
-            // Show check button, hide next button
-            if (checkBtn) checkBtn.style.display = 'block';
-            if (nextBtn) nextBtn.style.display = 'none';
-            
-            // Clear any selected radio buttons
-            const radioButtons = currentSlide.querySelectorAll('input[type="radio"]');
-            radioButtons.forEach(radio => {
-                radio.checked = false;
-            });
+            // This is an unanswered question, reset all feedback elements
+            resetFeedback(currentSlide);
         }
         
         // Update progress bar
@@ -496,6 +464,11 @@ document.addEventListener('DOMContentLoaded', function() {
             progressBar.setAttribute('aria-valuenow', 100);
             progressBar.textContent = '100%';
         }
+    }
+    
+    // Initialize the quiz if we have questions
+    if (questionSlides.length > 0 && quizIntro) {
+        console.log('Quiz initialized with', questionSlides.length, 'questions');
     }
 });
 </script>
