@@ -12,8 +12,8 @@ import gzip
 from io import BytesIO
 import functools
 from flask_session import Session
-# Only import extensions that are actually used
-# from flask_caching import Cache  
+# Import the caching extension
+from flask_caching import Cache  
 from flask_compress import Compress
 from flask_wtf.csrf import CSRFProtect
 from models.db import get_db, init_db
