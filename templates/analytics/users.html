@@ -14,7 +14,7 @@
                 <i class="fas fa-list-alt me-1"></i>Quiz Analytics
             </a>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="refreshBtn">
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="location.reload();"> {# Simpler refresh #}
             <i class="fas fa-sync-alt me-1"></i>Refresh Data
         </button>
     </div>
@@ -39,7 +39,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Active Users Over Time</h5>
+                        <h5 class="card-title mb-0">Active Users Over Time (30 days)</h5>
                     </div>
                     <div class="card-body">
                         <div style="height: 250px;">
@@ -51,7 +51,7 @@
             <div class="col-md-6 mb-4">
                 <div class="card shadow-sm h-100">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Activity by Hour</h5>
+                        <h5 class="card-title mb-0">Activity by Hour (All Time)</h5>
                     </div>
                     <div class="card-body">
                         <div style="height: 250px;">
@@ -65,8 +65,27 @@
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">User Performance</h5>
+        {# Filter Form #}
+        <form method="GET" action="{{ url_for('analytics.users') }}" class="d-flex align-items-center ms-auto">
+             {# Hidden inputs to preserve sorting when filtering #}
+            <input type="hidden" name="sort_by" value="{{ sort_params.sort_by }}">
+            <input type="hidden" name="sort_order" value="{{ sort_params.sort_order }}">
+            <label for="quiz_filter" class="me-2 visually-hidden">Filter by Quiz:</label>
+            <select name="quiz_filter" id="quiz_filter" class="form-select form-select-sm me-2" onchange="this.form.submit()">
+                <option value="">All Quizzes</option>
+                {% for quiz in quizzes %}
+                    <option value="{{ quiz.quiz_id }}" {% if quiz.quiz_id == current_quiz_filter %}selected{% endif %}>
+                        {{ quiz.quiz_name }}
+                    </option>
+                {% endfor %}
+            </select>
+             {# Removed explicit submit button, using onchange #}
+             {% if current_quiz_filter %}
+                 <a href="{{ url_for('analytics.users', sort_by=sort_params.sort_by, sort_order=sort_params.sort_order) }}" class="btn btn-sm btn-outline-secondary">Clear Filter</a>
+             {% endif %}
+        </form>
     </div>
     <div class="card-body">
         {% if users %}
@@ -74,10 +93,62 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>Username</th>
-                        <th>Quizzes Taken</th>
-                        <th>Avg. Score</th>
-                        <th>Last Active</th>
+                        {# Sortable Headers - Macro could simplify this #}
+                        {% set next_sort_order = 'asc' if sort_params.sort_by == 'username' and sort_params.sort_order == 'desc' else 'desc' %}
+                        <th>
+                            <a href="{{ url_for('analytics.users', page=1, quiz_filter=current_quiz_filter, sort_by='username', sort_order=next_sort_order) }}">
+                                Username
+                                {% if sort_params.sort_by == 'username' %}
+                                    <i class="fas fa-sort-{{ sort_params.sort_order }}"></i>
+                                {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        {% set next_sort_order = 'asc' if sort_params.sort_by == 'quizzes_taken' and sort_params.sort_order == 'desc' else 'desc' %}
+                        <th>
+                             <a href="{{ url_for('analytics.users', page=1, quiz_filter=current_quiz_filter, sort_by='quizzes_taken', sort_order=next_sort_order) }}">
+                                Quizzes Taken
+                                {% if sort_params.sort_by == 'quizzes_taken' %}
+                                    <i class="fas fa-sort-{{ sort_params.sort_order }}"></i>
+                                {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                         {% set next_sort_order = 'asc' if sort_params.sort_by == 'avg_score_percentage' and sort_params.sort_order == 'desc' else 'desc' %}
+                        <th>
+                             <a href="{{ url_for('analytics.users', page=1, quiz_filter=current_quiz_filter, sort_by='avg_score_percentage', sort_order=next_sort_order) }}">
+                                Avg. Score (%)
+                                {% if sort_params.sort_by == 'avg_score_percentage' %}
+                                    <i class="fas fa-sort-{{ sort_params.sort_order }}"></i>
+                                {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                         {% set next_sort_order = 'asc' if sort_params.sort_by == 'avg_raw_score' and sort_params.sort_order == 'desc' else 'desc' %}
+                        <th>
+                            <a href="{{ url_for('analytics.users', page=1, quiz_filter=current_quiz_filter, sort_by='avg_raw_score', sort_order=next_sort_order) }}">
+                                Avg. Raw Score
+                                {% if sort_params.sort_by == 'avg_raw_score' %}
+                                    <i class="fas fa-sort-{{ sort_params.sort_order }}"></i>
+                                {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                {% endif %}
+                            </a>
+                        </th>
+                        {% set next_sort_order = 'asc' if sort_params.sort_by == 'last_active' and sort_params.sort_order == 'desc' else 'desc' %}
+                        <th>
+                            <a href="{{ url_for('analytics.users', page=1, quiz_filter=current_quiz_filter, sort_by='last_active', sort_order=next_sort_order) }}">
+                                Last Active
+                                {% if sort_params.sort_by == 'last_active' %}
+                                    <i class="fas fa-sort-{{ sort_params.sort_order }}"></i>
+                                {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                {% endif %}
+                            </a>
+                        </th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -86,21 +157,76 @@
                     <tr>
                         <td>{{ user.username }}</td>
                         <td>{{ user.quizzes_taken }}</td>
-                        <td>{{ user.avg_score }}%</td>
-                        <td>{{ user.last_active|datetime }}</td>
+                        <td>{{ user.avg_score_percentage }}%</td>
+                        <td>{{ user.avg_raw_score }}</td>
+                        <td>{{ user.last_active|datetime if user.last_active else 'N/A' }}</td> {# Handle None case #}
                         <td>
-                            <button class="btn btn-sm btn-outline-primary view-user-btn" data-user-id="{{ user.discord_id }}">
-                                <i class="fas fa-eye me-1"></i>View
-                            </button>
+                             {# Removed view button for brevity, can be added back #}
+                            N/A
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {# Pagination Controls #}
+        {% if pagination.total_pages > 1 %}
+            <nav aria-label="User pagination">
+                <ul class="pagination justify-content-center">
+                    {# Previous Page Link #}
+                    <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('analytics.users', page=pagination.page - 1, quiz_filter=current_quiz_filter, sort_by=sort_params.sort_by, sort_order=sort_params.sort_order) }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+
+                    {# Page Number Links - simplified view for brevity #}
+                    {% set start_page = [1, pagination.page - 2] | max %}
+                    {% set end_page = [pagination.total_pages, pagination.page + 2] | min %}
+
+                    {% if start_page > 1 %}
+                         {# Fix for First page link near ellipsis #}
+                         {% set url_args = request.args.to_dict() %} {# Convert ImmutableMultiDict #}
+                         {% set _ = url_args.pop('page', None) %} {# Remove existing page param #}
+                         <li class="page-item"><a class="page-link" href="{{ url_for('analytics.users', page=1, **url_args) }}">1</a></li>
+                         {% if start_page > 2 %}
+                             <li class="page-item disabled"><span class="page-link">...</span></li>
+                         {% endif %}
+                    {% endif %}
+
+                    {% for p in range(start_page, end_page + 1) %}
+                        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                            {# This link uses explicit args, so it's okay #}
+                            <a class="page-link" href="{{ url_for('analytics.users', page=p, quiz_filter=current_quiz_filter, sort_by=sort_params.sort_by, sort_order=sort_params.sort_order) }}">{{ p }}</a>
+                        </li>
+                    {% endfor %}
+
+                     {% if end_page < pagination.total_pages %}
+                        {% if end_page < pagination.total_pages - 1 %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                         {# Fix for Last page link near ellipsis #}
+                         {% set url_args = request.args.to_dict() %} {# Convert ImmutableMultiDict #}
+                         {% set _ = url_args.pop('page', None) %} {# Remove existing page param #}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('analytics.users', page=pagination.total_pages, **url_args) }}">{{ pagination.total_pages }}</a></li>
+                    {% endif %}
+
+                    {# Next Page Link (Okay as it uses explicit args) #}
+                    <li class="page-item {% if pagination.page == pagination.total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('analytics.users', page=pagination.page + 1, quiz_filter=current_quiz_filter, sort_by=sort_params.sort_by, sort_order=sort_params.sort_order) }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <p class="text-center text-muted">Showing {{ users|length }} of {{ pagination.total_users }} users</p>
+        {% elif pagination.total_users > 0 %}
+             <p class="text-center text-muted">Showing all {{ pagination.total_users }} users</p>
+        {% endif %}
         {% else %}
-        <div class="alert alert-info">
-            <i class="fas fa-info-circle me-2"></i>No user data available yet.
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle me-2"></i>No user data found matching the criteria.
         </div>
         {% endif %}
     </div>
@@ -111,28 +237,42 @@
 <!-- Prepare hourly activity data -->
 <script id="hourly-data" type="application/json">
 {
-    "hours": ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", 
+    "hours": ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
               "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"],
-    "activity": [0, 0, 0, 0, 0, 0, 1, 2, 4, 5, 6, 5, 4, 5, 6, 7, 8, 7, 5, 4, 3, 2, 1, 0]
+    {# Use data passed from backend #}
+    "activity": {{ active_hours | tojson | safe }}
 }
 </script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Refresh button functionality
-    document.getElementById('refreshBtn').addEventListener('click', function() {
-        location.reload();
-    });
-    
-    // User Activity Chart
+    // Refresh button can stay simplified if desired
+    // document.getElementById('refreshBtn').addEventListener('click', function() {
+    //     location.reload();
+    // });
+
+    // User Activity Chart (Last 30 days)
     fetch('/analytics/api/user_activity?days=30')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+             if (!Array.isArray(data)) {
+                console.error('Error: User activity data is not an array:', data);
+                return; // Stop if data is not as expected
+            }
             const dates = data.map(item => item.date);
             const counts = data.map(item => item.count);
-            
-            const activityCtx = document.getElementById('userActivityChart').getContext('2d');
-            new Chart(activityCtx, {
+
+            const activityCtx = document.getElementById('userActivityChart');
+            if (!activityCtx) {
+                 console.error("Element with ID 'userActivityChart' not found.");
+                 return;
+            }
+            const activityChart = new Chart(activityCtx.getContext('2d'), { // Store chart instance
                 type: 'line',
                 data: {
                     labels: dates,
@@ -150,11 +290,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     maintainAspectRatio: false,
                     scales: {
                         x: {
-                            time: {
-                                unit: 'day',
-                                displayFormats: {
-                                    day: 'MMM D'
-                                }
+                            // If using a time adapter for Chart.js:
+                            // type: 'time',
+                            // time: {
+                            //     unit: 'day',
+                            //     displayFormats: {
+                            //         day: 'YYYY-MM-DD' // Adjust format as needed
+                            //     }
+                            // }
+                             ticks: {
+                                // Auto skip ticks if too many labels
+                                autoSkip: true,
+                                maxTicksLimit: 10 // Adjust limit as needed
                             }
                         },
                         y: {
@@ -168,13 +315,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         })
         .catch(error => console.error('Error fetching user activity data:', error));
-        
-    // Hourly Activity Chart
+
+    // Hourly Activity Chart (All Time)
+    let hourlyChart = null; // Define variable to hold chart instance
     try {
-        const hourlyData = JSON.parse(document.getElementById('hourly-data').textContent);
-        
-        const hourlyCtx = document.getElementById('hourlyActivityChart').getContext('2d');
-        new Chart(hourlyCtx, {
+        const hourlyDataElement = document.getElementById('hourly-data');
+        if (!hourlyDataElement) {
+            throw new Error("Element with ID 'hourly-data' not found.");
+        }
+        const hourlyData = JSON.parse(hourlyDataElement.textContent);
+         if (!hourlyData || !Array.isArray(hourlyData.activity)) {
+            console.error('Error: Hourly activity data is missing or invalid:', hourlyData);
+            return; // Stop if data is not as expected
+        }
+
+        const hourlyCtx = document.getElementById('hourlyActivityChart');
+         if (!hourlyCtx) {
+             console.error("Element with ID 'hourlyActivityChart' not found.");
+             return;
+         }
+
+        hourlyChart = new Chart(hourlyCtx.getContext('2d'), { // Store chart instance
             type: 'bar',
             data: {
                 labels: hourlyData.hours,
@@ -200,17 +361,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } catch (e) {
-        console.error('Error parsing hourly data:', e);
+        console.error('Error processing or rendering hourly data chart:', e);
     }
-    
-    // User detail view button functionality
-    const viewUserBtns = document.querySelectorAll('.view-user-btn');
-    viewUserBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const userId = this.getAttribute('data-user-id');
-            alert(`View details for user ${userId} (To be implemented)`);
-        });
-    });
+
+    // --- You might need JS for the filter/pagination/sorting if complex interactions are added later ---
+    // Example: If you had a view button for users in the table
+    // const viewUserBtns = document.querySelectorAll('.view-user-btn');
+    // viewUserBtns.forEach(btn => {
+    //     btn.addEventListener('click', function() {
+    //         const userId = this.getAttribute('data-user-id');
+    //         // Implement view logic, e.g., redirect or show modal
+    //         console.log(`View details for user ${userId}`);
+    //     });
+    // });
 });
 </script>
 {% endblock %} 
