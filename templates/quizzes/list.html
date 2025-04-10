@@ -34,6 +34,7 @@
                             <th>Quiz Name</th>
                             <th>Creator</th>
                             <th>Questions</th>
+                            <th>Total Points</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -43,6 +44,7 @@
                                 <td>{{ quiz.name }}</td>
                                 <td>{{ quiz.creator_username or quiz.creator_id }}</td>
                                 <td>{{ quiz.question_count or 0 }}</td>
+                                <td>{{ quiz.total_points or 0 }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         <a href="{{ url_for('quizzes.view', quiz_id=quiz.id) }}" class="btn btn-outline-primary">

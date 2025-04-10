@@ -65,6 +65,7 @@ def list():
         # Add question counts to each quiz
         for quiz in quizzes:
             quiz.question_count = quiz.get_question_count()
+            quiz.total_points = quiz.get_total_score()
         
         # Try to get quizzes from cache first - using get_cache function
         try:
@@ -147,6 +148,7 @@ def view(quiz_id):
         logger.info(f"Fetching questions for quiz {quiz_id}")
         questions = quiz.get_questions()
         
+        total_points = quiz.get_total_score()
         # Check cache with get_cache helper
         try:
             cache_key = f"quiz_view_{quiz_id}_{current_user.id}"
@@ -162,7 +164,7 @@ def view(quiz_id):
                         quiz_data, questions_data = cached_data
                         cached_quiz = deserialize_quiz_data(quiz_data, is_list=False)
                         cached_questions = [Quiz.question_from_dict(q) for q in questions_data]
-                        return render_template('quizzes/view.html', quiz=cached_quiz, questions=cached_questions)
+                        return render_template('quizzes/view.html', quiz=cached_quiz, questions=cached_questions, total_points=total_points)
                     else:
                         logger.info(f"No cached data found for quiz {quiz_id}")
                 except Exception as cache_get_error:

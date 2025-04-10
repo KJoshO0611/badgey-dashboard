@@ -183,7 +183,7 @@
                                     <tr>
                                         <td>{{ activity.username|default('User ' + activity.user_id|string) }}</td>
                                         <td>{{ activity.quiz_name }}</td>
-                                        <td>{{ activity.score }}%</td>
+                                        <td>{{ activity.score_percentage }}%</td>
                                         <td>{{ activity.completion_date|datetime }}</td>
                                     </tr>
                                 {% endfor %}

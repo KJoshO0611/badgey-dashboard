@@ -1,5 +1,6 @@
 import logging
-from flask import Blueprint, render_template, jsonify, request
+import math
+from flask import Blueprint, flash, render_template, jsonify, request
 from flask_login import login_required, current_user
 from decorators import role_required
 import json
@@ -43,64 +44,205 @@ def quizzes():
     """Show quiz analytics"""
     conn = get_db()
     quiz_data = []
-    
+
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT q.quiz_id, q.quiz_name, 
-                       q.creator_username as creator, 
-                       COUNT(DISTINCT us.id) as attempts, AVG(us.score) as avg_score,
-                       COUNT(DISTINCT qu.question_id) as question_count
+                SELECT
+                    q.quiz_id, q.quiz_name,
+                    q.creator_username as creator,
+                    COUNT(DISTINCT us.id) as attempts,
+                    AVG(us.score) as avg_raw_score,
+                    AVG(
+                        CASE
+                            WHEN qt.total_score IS NOT NULL AND qt.total_score > 0 THEN (us.score * 100.0 / qt.total_score)
+                            ELSE 0
+                        END
+                    ) as avg_score_percentage,
+                    COUNT(DISTINCT qu.question_id) as question_count,
+                    COALESCE(qt.total_score, 0) as total_points -- Add total points here
                 FROM quizzes q
                 LEFT JOIN user_scores us ON q.quiz_id = us.quiz_id
                 LEFT JOIN questions qu ON q.quiz_id = qu.quiz_id
-                GROUP BY q.quiz_id, q.quiz_name, q.creator_username
+                LEFT JOIN (
+                    SELECT quiz_id, SUM(score) as total_score
+                    FROM questions
+                    GROUP BY quiz_id
+                ) qt ON q.quiz_id = qt.quiz_id
+                GROUP BY q.quiz_id, q.quiz_name, q.creator_username, qt.total_score -- Group by total_score too
                 ORDER BY attempts DESC
             """)
             quiz_data = cursor.fetchall()
-            
+
             # Format the data
             for quiz in quiz_data:
-                if quiz['avg_score'] is not None:
-                    quiz['avg_score'] = round(quiz['avg_score'], 1)
-                else:
-                    quiz['avg_score'] = 0
+                quiz['avg_raw_score'] = round(quiz['avg_raw_score'], 1) if quiz['avg_raw_score'] is not None else 0
+                quiz['avg_score_percentage'] = round(quiz['avg_score_percentage'], 1) if quiz['avg_score_percentage'] is not None else 0
+                quiz['avg_score'] = quiz['avg_score_percentage']
+                # Ensure total_points is present (already handled by COALESCE in SQL)
+
     except Exception as e:
-        logger.error(f"Error fetching quiz analytics: {e}")
-        
+        logger.error(f"Error fetching quiz analytics: {e}", exc_info=True)
+
     return render_template('analytics/quizzes.html', quizzes=quiz_data)
 
 @analytics_bp.route('/users')
 @login_required
 @role_required(['analytics_viewer', 'admin'])
 def users():
-    """Show user analytics"""
+    """Show user analytics with filtering, sorting, and pagination."""
     conn = get_db()
     user_data = []
-    
+    quizzes_list = []
+    total_users = 0
+    limit = 20 # Default items per page
+    active_hours_data = [0] * 24 # Initialize default
+    page = 1
+    quiz_filter = None
+    sort_by = 'quizzes_taken'
+    sort_order = 'desc'
+    total_pages = 0
+
+    # Initialize pagination and sort_params dictionaries
+    pagination = {'page': 1, 'per_page': limit, 'total_users': 0, 'total_pages': 0}
+    sort_params = {'sort_by': 'quizzes_taken', 'sort_order': 'desc'}
+
     try:
+        # --- Get Filter/Sort/Pagination Parameters ---
+        page = request.args.get('page', 1, type=int)
+        quiz_filter = request.args.get('quiz_filter', None, type=int)
+        sort_by = request.args.get('sort_by', 'quizzes_taken')
+        sort_order = request.args.get('sort_order', 'desc')
+
+        # Update sort_params dictionary after getting args
+        sort_params = {'sort_by': sort_by, 'sort_order': sort_order}
+
+        # Validate sort_order
+        if sort_order not in ['asc', 'desc']:
+            sort_order = 'desc'
+            sort_params['sort_order'] = 'desc' # Update dict too
+
+        # Map sort_by parameter to actual DB columns/aliases to prevent injection
+        allowed_sort_columns = {
+            'username': 'us.user_name',
+            'quizzes_taken': 'quizzes_taken',
+            'avg_score_percentage': 'avg_score_percentage',
+            'avg_raw_score': 'avg_raw_score',
+            'last_active': 'last_active'
+        }
+        order_by_column = allowed_sort_columns.get(sort_by, 'quizzes_taken')
+
+        # Calculate OFFSET for pagination
+        offset = (page - 1) * limit
+
+        # --- Fetch Quizzes for Filter Dropdown ---
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT us.user_id as discord_id, us.user_name as username, 
-                       COUNT(us.id) as quizzes_taken,
-                       AVG(us.score) as avg_score,
-                       MAX(us.completion_date) as last_active
-                FROM user_scores us
-                GROUP BY us.user_id, us.user_name
-                ORDER BY quizzes_taken DESC
-            """)
+            cursor.execute("SELECT quiz_id, quiz_name FROM quizzes ORDER BY quiz_name ASC")
+            quizzes_list = cursor.fetchall()
+
+        # --- Fetch User Stats for Charts ---
+        user_stats = get_user_stats() # Call helper function
+        # Add robust check for user_stats and active_hours key
+        if isinstance(user_stats, dict):
+             temp_active_hours = user_stats.get('active_hours') # Get value first
+             if isinstance(temp_active_hours, list):
+                 active_hours_data = temp_active_hours # Assign if it's a list
+             else:
+                 logger.warning(f"get_user_stats returned 'active_hours' that is not a list: {temp_active_hours}. Falling back to default.")
+                 # Keep the initialized default
+        else:
+             logger.error(f"get_user_stats did not return a dictionary: {user_stats}. Falling back to default active_hours.")
+             # Keep the initialized default
+
+        # --- Build SQL Query ---
+        base_query = """
+            SELECT
+                us.user_id as discord_id,
+                us.user_name as username,
+                COUNT(us.id) as quizzes_taken,
+                AVG(us.score) as avg_raw_score,
+                AVG(
+                    CASE
+                        WHEN qt.total_score IS NOT NULL AND qt.total_score > 0 THEN (us.score * 100.0 / qt.total_score)
+                        ELSE 0
+                    END
+                ) as avg_score_percentage,
+                MAX(us.completion_date) as last_active
+            FROM user_scores us
+            JOIN quizzes q ON us.quiz_id = q.quiz_id
+            LEFT JOIN (
+                SELECT quiz_id, SUM(score) as total_score
+                FROM questions
+                GROUP BY quiz_id
+            ) qt ON us.quiz_id = qt.quiz_id
+        """
+        count_query = "SELECT COUNT(DISTINCT us.user_id) as total FROM user_scores us"
+        params = []
+        where_clauses = []
+
+        # Apply quiz filter if provided
+        if quiz_filter:
+            where_clauses.append("us.quiz_id = %s")
+            params.append(quiz_filter)
+
+        # Add WHERE clauses to queries
+        if where_clauses:
+            where_sql = " WHERE " + " AND ".join(where_clauses)
+            base_query += where_sql
+            count_query += where_sql # Add filter to count query as well
+
+        # Add Group By
+        base_query += " GROUP BY us.user_id, us.user_name"
+
+        # Add Order By
+        base_query += f" ORDER BY {order_by_column} {sort_order.upper()}, us.user_name ASC" # Add secondary sort
+
+        # Add Limit and Offset for pagination
+        base_query += " LIMIT %s OFFSET %s"
+        count_params = params[:] # Copy params for count query *before* adding limit/offset
+        params.extend([limit, offset]) # Add limit and offset to params list
+
+        # --- Execute Queries ---
+        with conn.cursor() as cursor:
+            # Fetch total count first (using the same filter)
+            cursor.execute(count_query, count_params) # Use copied params
+            total_users = cursor.fetchone()['total'] or 0
+
+            # Fetch user data for the current page
+            cursor.execute(base_query, params)
             user_data = cursor.fetchall()
-            
-            # Format the data
-            for user in user_data:
-                if user['avg_score'] is not None:
-                    user['avg_score'] = round(user['avg_score'], 1)
-                else:
-                    user['avg_score'] = 0
+
+        # Calculate total pages
+        total_pages = math.ceil(total_users / limit)
+
+        # Update pagination dict
+        pagination = {'page': page, 'per_page': limit, 'total_users': total_users, 'total_pages': total_pages}
+
+        # --- Format Data ---
+        for user in user_data:
+            user['avg_raw_score'] = round(user['avg_raw_score'], 1) if user['avg_raw_score'] is not None else 0
+            user['avg_score_percentage'] = round(user['avg_score_percentage'], 1) if user['avg_score_percentage'] is not None else 0
+            user['avg_score'] = user['avg_score_percentage'] # Keep for compatibility if needed
+
     except Exception as e:
-        logger.error(f"Error fetching user analytics: {e}")
-        
-    return render_template('analytics/users.html', users=user_data)
+        logger.error(f"Error fetching user analytics: {e}", exc_info=True)
+        flash("An error occurred while fetching user analytics.", "danger")
+        # pagination/sort_params retain initial values, active_hours_data retains initial value or value from get_user_stats
+
+    # Final check before rendering
+    if not isinstance(active_hours_data, list):
+        logger.error(f"active_hours_data is not a list before rendering: {type(active_hours_data)}. Forcing default.")
+        active_hours_data = [0] * 24
+
+    return render_template(
+        'analytics/users.html',
+        users=user_data,
+        quizzes=quizzes_list, # Pass quiz list for filter
+        current_quiz_filter=quiz_filter, # Pass current filter
+        pagination=pagination, # Pass the dictionary
+        sort_params=sort_params, # Pass the dictionary
+        active_hours=active_hours_data # Pass the verified/defaulted list
+    )
 
 @analytics_bp.route('/trends')
 @login_required
@@ -209,8 +351,26 @@ def get_summary_metrics():
             total_users = cursor.fetchone()['count']
             
             # Average score
-            cursor.execute("SELECT AVG(score) as avg_score FROM user_scores")
-            avg_score = cursor.fetchone()['avg_score'] or 0
+            cursor.execute("""
+                SELECT AVG(score_percentage) as avg_score_percentage
+                FROM (
+                    SELECT
+                        CASE
+                            WHEN qt.total_score IS NOT NULL AND qt.total_score > 0 THEN (us.score * 100.0 / qt.total_score)
+                            ELSE 0
+                        END as score_percentage
+                    FROM user_scores us
+                    JOIN quizzes q ON us.quiz_id = q.quiz_id
+                    LEFT JOIN (
+                        SELECT quiz_id, SUM(score) as total_score
+                        FROM questions
+                        GROUP BY quiz_id
+                    ) qt ON q.quiz_id = qt.quiz_id
+                ) AS score_percentages
+            """)
+            result = cursor.fetchone()
+            # Use the calculated average percentage
+            avg_score = result['avg_score_percentage'] or 0
             
             # Quiz attempts today
             today = datetime.now().date()
@@ -252,46 +412,84 @@ def get_summary_metrics():
 def get_top_quizzes(limit=10):
     """Get top quizzes by number of attempts"""
     conn = get_db()
-    
+
     try:
         with conn.cursor() as cursor:
-            query = """
-            SELECT q.quiz_id, q.quiz_name, COUNT(*) as attempts, AVG(us.score) as avg_score
+            # Use f-string for LIMIT, ensure limit is integer
+            # Calculate average score percentage per quiz
+            query = f"""
+            SELECT
+                q.quiz_id,
+                q.quiz_name,
+                COUNT(us.id) as attempts,
+                AVG(
+                    CASE
+                        WHEN qt.total_score IS NOT NULL AND qt.total_score > 0 THEN (us.score * 100.0 / qt.total_score)
+                        ELSE 0
+                    END
+                ) as avg_score_percentage
             FROM quizzes q
             JOIN user_scores us ON q.quiz_id = us.quiz_id
-            GROUP BY q.quiz_id, q.quiz_name
+            LEFT JOIN (
+                SELECT quiz_id, SUM(score) as total_score
+                FROM questions
+                GROUP BY quiz_id
+            ) qt ON q.quiz_id = qt.quiz_id
+            GROUP BY q.quiz_id, q.quiz_name -- Include qt.total_score if needed for debugging, but not necessary for grouping here
             ORDER BY attempts DESC
-            LIMIT %s
+            LIMIT {int(limit)}
             """
-            cursor.execute(query, (limit,))
-            return cursor.fetchall()
+            cursor.execute(query)
+            quizzes = cursor.fetchall()
+
+            # Format the data (round the avg_score_percentage)
+            for quiz in quizzes:
+                 quiz['avg_score'] = round(quiz.pop('avg_score_percentage'), 1) # Rename key and round
+
+            return quizzes
     except Exception as e:
-        logger.error(f"Error getting top quizzes: {e}")
+        logger.error(f"Error getting top quizzes: {e}", exc_info=True)
         return []
+
 
 def get_recent_activity(limit=10):
     """Get recent quiz activity"""
     conn = get_db()
-    
+
     try:
         with conn.cursor() as cursor:
-            query = """
-            SELECT us.id, us.user_id, us.user_name as username, q.quiz_id, q.quiz_name, us.score, us.completion_date
+            # Use f-string for LIMIT, ensuring limit is an integer
+            query = f"""
+            SELECT
+                us.id, us.user_id, us.user_name as username,
+                q.quiz_id, q.quiz_name,
+                CASE
+                    WHEN qt.total_score IS NOT NULL AND qt.total_score > 0 THEN (us.score * 100.0 / qt.total_score)
+                    ELSE 0 -- Assign 0% if total_score is 0 or null
+                END as score_percentage,
+                us.completion_date
             FROM user_scores us
             JOIN quizzes q ON us.quiz_id = q.quiz_id
+            LEFT JOIN (
+                SELECT quiz_id, SUM(score) as total_score
+                FROM questions
+                GROUP BY quiz_id
+            ) qt ON q.quiz_id = qt.quiz_id
             ORDER BY us.completion_date DESC
-            LIMIT %s
+            LIMIT {int(limit)} -- Format limit directly into query
             """
-            cursor.execute(query, (limit,))
+            # Execute the query without the limit parameter
+            cursor.execute(query)
             activity = cursor.fetchall()
-            
-            # Convert timestamp to string for JSON serialization
+
+            # Format the data
             for entry in activity:
+                entry['score_percentage'] = round(entry['score_percentage'], 1) if entry['score_percentage'] is not None else 0
                 entry['completion_date'] = entry['completion_date'].isoformat() if entry['completion_date'] else None
-            
+
             return activity
     except Exception as e:
-        logger.error(f"Error getting recent activity: {e}")
+        logger.error(f"Error getting recent activity: {e}", exc_info=True)
         return []
 
 def get_user_stats():
@@ -335,8 +533,6 @@ def get_user_stats():
     except Exception as e:
         logger.error(f"Error getting user stats: {e}")
         return {'top_users': [], 'active_hours': [0] * 24}
-    finally:
-        conn.close()
 
 def get_quiz_activity(days=30):
     """Get quiz activity over time"""
