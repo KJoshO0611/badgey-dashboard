@@ -22,3 +22,11 @@ mysql-connector-python>=8.0.0
 flask-caching>=2.0.2
 flask-compress
 redis>=4.5.1
+psutil>=6.0.0
+pandas>=2.0.0
+numpy>=2.0.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+plotly>=5.0.0
+
+
