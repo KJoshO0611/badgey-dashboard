@@ -36,9 +36,10 @@
                             <td>{{ user.discord_id }}</td>
                             <td>{{ user.email or '-' }}</td>
                             <td>
-                                {% if user.roles %}
-                                    {% for role in user.roles %}
-                                        <span class="badge bg-secondary">{{ role }}</span>
+                                {% if user.roles_list %}
+                                    {% for role in user.roles_list %}
+                                        {% set badge_color = 'primary' if role == 'admin' else ('info' if role == 'quiz_creator' else ('warning' if role == 'analytics_viewer' else 'secondary')) %}
+                                        <span class="badge bg-{{ badge_color }}">{{ role }}</span>
                                     {% endfor %}
                                 {% else %}
                                     <span class="badge bg-light text-dark">No roles</span>
@@ -60,7 +61,7 @@
                                            data-username="{{ user.username }}">
                                         <i class="fas fa-user-tag"></i> Roles
                                     </button>
-                                    {% if not 'admin' in user.roles or current_user.discord_id != user.discord_id %}
+                                    {% if 'admin' not in (user.roles_list or []) or current_user.discord_id != user.discord_id %}
                                         <button class="btn btn-outline-danger"
                                                data-bs-toggle="modal"
                                                data-bs-target="#deleteUserModal"
@@ -87,7 +88,7 @@
                 <h5 class="modal-title">Edit User Roles</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{{ url_for('admin.update_user_roles') }}">
+            <form method="POST" action="{{ url_for('admin.update_user_roles_form') }}">
                 <div class="modal-body">
                     <input type="hidden" name="user_id" id="editRolesUserId">
                     <p>Editing roles for <strong id="editRolesUsername"></strong></p>
@@ -165,17 +166,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkbox.checked = false;
             });
             
-            // Fetch user roles with API
+            // Fetch user roles with API to pre-populate checkboxes
             fetch('/admin/api/user_roles')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(users => {
                     const user = users.find(u => u.id == userId);
-                    if (user && user.roles) {
+                    if (user && user.roles && Array.isArray(user.roles)) {
                         user.roles.forEach(role => {
-                            const checkbox = document.getElementById('role' + role.charAt(0).toUpperCase() + role.slice(1));
-                            if (checkbox) checkbox.checked = true;
+                            // Construct the checkbox ID based on the value
+                            const checkbox = document.querySelector(`input[name="roles"][value="${role}"]`);
+                            if (checkbox) {
+                                checkbox.checked = true;
+                            } else {
+                                console.warn(`Checkbox for role '${role}' not found.`);
+                            }
                         });
+                    } else if (user) {
+                         console.warn(`User found but roles are missing or not an array:`, user.roles);
                     }
+                })
+                .catch(error => {
+                    console.error('Error fetching user roles:', error);
+                    // Optionally display an error to the user in the modal
                 });
         });
     }

@@ -104,7 +104,7 @@
                                 </span>
                             </td>
                             <td class="log-timestamp">
-                                {{ log.timestamp|datetime }}
+                                {{ log.timestamp|datetime('%Y-%m-%d %H:%M:%S') }}
                             </td>
                             <td class="log-source">
                                 {{ log.source }}
