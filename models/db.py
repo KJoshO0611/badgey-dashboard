@@ -123,6 +123,58 @@ def init_app(app):
         @app.teardown_appcontext
         def shutdown_pool(exception=None):
             close_all_connections()
+    
+    # Migrate sessions on startup
+    migrate_anonymous_sessions()
+
+def migrate_anonymous_sessions():
+    """Update any sessions with user_id=1 that should be anonymous to user_id=0."""
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # First check if the foreign key constraint exists and drop it if needed
+            cursor.execute("""
+                SELECT CONSTRAINT_NAME 
+                FROM information_schema.KEY_COLUMN_USAGE 
+                WHERE TABLE_NAME = 'dashboard_sessions' 
+                  AND COLUMN_NAME = 'user_id' 
+                  AND REFERENCED_TABLE_NAME = 'dashboard_users'
+                  AND CONSTRAINT_SCHEMA = DATABASE()
+            """)
+            result = cursor.fetchone()
+            
+            if result and result.get('CONSTRAINT_NAME'):
+                constraint_name = result['CONSTRAINT_NAME']
+                logger.info(f"Found foreign key constraint: {constraint_name}")
+                
+                # Drop the constraint
+                cursor.execute(f"""
+                    ALTER TABLE dashboard_sessions
+                    DROP FOREIGN KEY {constraint_name}
+                """)
+                logger.info(f"Successfully dropped foreign key constraint: {constraint_name}")
+            
+            # Check if user with ID 1 exists
+            cursor.execute("SELECT id FROM dashboard_users WHERE id = 1")
+            user_exists = cursor.fetchone() is not None
+            
+            if not user_exists:
+                # Update all sessions with user_id=1 to user_id=0
+                cursor.execute("""
+                    UPDATE dashboard_sessions
+                    SET user_id = 0
+                    WHERE user_id = 1
+                """)
+                affected_rows = cursor.rowcount
+                logger.info(f"Updated {affected_rows} anonymous sessions from user_id=1 to user_id=0")
+                
+        conn.commit()
+        logger.info("Session migration completed successfully")
+    except Exception as e:
+        logger.error(f"Error during session migration: {e}")
+        conn.rollback()
+    finally:
+        release_db(conn)
 
 def log_activity(user_id, action, details, ip_address=None):
     """
@@ -178,8 +230,7 @@ def init_db():
                 user_id INT NOT NULL,
                 data TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                expires_at TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES dashboard_users(id) ON DELETE CASCADE
+                expires_at TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """)
             

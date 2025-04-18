@@ -338,7 +338,10 @@ def dashboard():
             """, (current_user.discord_id,))
             recent_score = cursor.fetchone()
             if recent_score:
-                user_stats['recent_score'] = f"{recent_score['score']}%"
+                # Normalize score to a 0-100% scale
+                score_value = float(recent_score['score'])
+                normalized_score = min(100.0, score_value)  # Cap at 100%
+                user_stats['recent_score'] = f"{normalized_score:.0f}%"
             
             # Get recent activity
             cursor.execute("""
@@ -353,9 +356,12 @@ def dashboard():
             
             for item in activity_data:
                 action = "Completed Quiz"
+                # Normalize score to a 0-100% scale
+                score_value = float(item['score'])
+                normalized_score = min(100.0, score_value)  # Cap at 100%
                 recent_activity.append({
                     'action': action,
-                    'description': f"Scored {item['score']}% on {item['quiz_name']}",
+                    'description': f"Scored {normalized_score:.0f}% on {item['quiz_name']}",
                     'timestamp': item['completion_date'].strftime('%Y-%m-%d %H:%M')
                 })
             

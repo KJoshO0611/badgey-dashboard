@@ -230,8 +230,14 @@ class CustomSqlAlchemySessionInterface(SessionInterface):
         
         sid = session.sid if session.sid else self._generate_sid()
         
-        # Get current user ID
-        user_id = getattr(current_user, 'id', 1)
+        # Get current user ID - properly handle authentication
+        user_id = None
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            user_id = getattr(current_user, 'id', None)
+        
+        # If no authenticated user, use a special anonymous user ID
+        if user_id is None:
+            user_id = 0  # Use 0 for anonymous/unauthenticated users
         
         # Prepare session data
         session_data = dict(session)
