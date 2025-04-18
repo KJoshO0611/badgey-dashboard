@@ -44,10 +44,32 @@
                             </a>
                         </li>
                         {% if current_user.has_role('analytics_viewer') or current_user.has_role('admin') %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('analytics.index') }}">
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button" data-bs-toggle="dropdown">
                                     <i class="fas fa-chart-bar me-1"></i>Analytics
                                 </a>
+                                <ul class="dropdown-menu">
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('analytics.index') }}">
+                                            <i class="fas fa-tachometer-alt me-1"></i>Overview
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('analytics.quizzes') }}">
+                                            <i class="fas fa-list-alt me-1"></i>Quiz Analytics
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('analytics.users') }}">
+                                            <i class="fas fa-users me-1"></i>User Analytics
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('analytics.tribbles') }}">
+                                            <i class="fas fa-paw me-1"></i>Tribble Hunt
+                                        </a>
+                                    </li>
+                                </ul>
                             </li>
                         {% endif %}
                         {% if current_user.has_role('admin') %}

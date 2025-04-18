@@ -327,6 +327,145 @@ def api_quiz_completions():
         logger.error(f"Error retrieving quiz completion data: {e}")
         return jsonify({'error': str(e)}), 500
 
+@analytics_bp.route('/tribbles')
+@login_required
+@role_required(['analytics_viewer', 'admin'])
+def tribbles():
+    """Show tribble hunt analytics"""
+    conn = get_db()
+    events = []
+    top_hunters = []
+    stats = {
+        'total_drops': 0,
+        'total_claimed': 0,
+        'total_escaped': 0,
+        'active_events': 0,
+        'participant_count': 0  # Added participant count
+    }
+    rarity_distribution = [0, 0, 0, 0, 0]  # Common, Uncommon, Rare, Epic, Legendary
+    activity_data = []  # For activity chart
+
+    try:
+        with conn.cursor() as cursor:
+            # Get recent events
+            cursor.execute("""
+                SELECT 
+                    id, event_id, active, start_time, end_time, 
+                    guild_id, event_name
+                FROM tribble_event
+                ORDER BY start_time DESC
+                LIMIT 10
+            """)
+            events = cursor.fetchall()
+            
+            # Count active events
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM tribble_event
+                WHERE active = 1
+            """)
+            active_events = cursor.fetchone()
+            if active_events:
+                stats['active_events'] = active_events['count']
+            
+            # Get drop statistics
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN claimed_by IS NOT NULL THEN 1 ELSE 0 END) as claimed,
+                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
+                FROM tribble_drops
+            """)
+            drop_stats = cursor.fetchone()
+            if drop_stats:
+                stats['total_drops'] = drop_stats['total'] or 0
+                stats['total_claimed'] = drop_stats['claimed'] or 0
+                stats['total_escaped'] = drop_stats['escape_count'] or 0
+            
+            # Count unique participants
+            cursor.execute("""
+                SELECT COUNT(DISTINCT user_id) as participant_count
+                FROM tribble_scores
+            """)
+            participant_count = cursor.fetchone()
+            if participant_count:
+                stats['participant_count'] = participant_count['participant_count'] or 0
+            
+            # Get rarity distribution
+            cursor.execute("""
+                SELECT rarity, COUNT(*) as count
+                FROM tribble_drops
+                GROUP BY rarity
+                ORDER BY rarity
+            """)
+            rarity_counts = cursor.fetchall()
+            
+            # Map rarity values to positions in the distribution array
+            for rarity in rarity_counts:
+                rarity_value = rarity['rarity']
+                if 1 <= rarity_value <= 5:
+                    rarity_distribution[rarity_value-1] = rarity['count']
+            
+            # Get top hunters - use username column from tribble_scores directly
+            cursor.execute("""
+                SELECT 
+                    ts.user_id,
+                    COALESCE(ts.username, CONCAT('User ', ts.user_id)) as username,
+                    ts.score,
+                    COUNT(td.message_id) as tribbles_caught
+                FROM tribble_scores ts
+                LEFT JOIN tribble_drops td ON ts.user_id = td.claimed_by
+                GROUP BY ts.user_id, ts.username, ts.score
+                ORDER BY ts.score DESC
+                LIMIT 10
+            """)
+            top_hunters_data = cursor.fetchall()
+            
+            # Format hunter data
+            for hunter in top_hunters_data:
+                top_hunters.append({
+                    'username': hunter['username'],
+                    'score': hunter['score'],
+                    'tribbles_caught': hunter['tribbles_caught'] or 0
+                })
+            
+            # Get activity data with hourly precision instead of just per day
+            cursor.execute("""
+                SELECT 
+                    DATE_FORMAT(captured_at, '%Y-%m-%d %H:00:00') as time_period,
+                    COUNT(*) as total,
+                    SUM(CASE WHEN claimed_by IS NOT NULL THEN 1 ELSE 0 END) as claimed,
+                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
+                FROM tribble_drops
+                WHERE captured_at IS NOT NULL
+                GROUP BY time_period
+                ORDER BY time_period DESC
+                LIMIT 48
+            """)
+            activity_results = cursor.fetchall()
+            
+            # Reverse the results to show oldest to newest
+            for result in reversed(activity_results):
+                activity_data.append({
+                    'time_period': result['time_period'],
+                    'total': result['total'],
+                    'claimed': result['claimed'] or 0,
+                    'escaped': result['escape_count'] or 0
+                })
+                
+    except Exception as e:
+        logger.error(f"Error fetching tribble hunt analytics: {e}", exc_info=True)
+        flash("An error occurred while fetching tribble hunt analytics.", "danger")
+
+    return render_template(
+        'analytics/tribbles.html',
+        events=events,
+        top_hunters=top_hunters,
+        stats=stats,
+        rarity_distribution=rarity_distribution,
+        activity_data=activity_data
+    )
+
 # Helper functions for analytics data
 def get_summary_metrics():
     """Get summary metrics for the dashboard"""

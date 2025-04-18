@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Tribble Hunt Analytics - Badgey Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Tribble Hunt Analytics</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Tribble Hunt Analytics</li>
+    </ol>
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-table me-1"></i>
+                    Recent Events
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Event</th>
+                                <th>Tribble</th>
+                                <th>User</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if events %}
+                                {% for event in events %}
+                                <tr>
+                                    <td>{{ event.event_type|default('Spawn') }}</td>
+                                    <td>{{ event.rarity|default('Unknown') }} {{ event.emoji|default('🦔') }}</td>
+                                    <td>{{ event.claimed_by|default('N/A') }}</td>
+                                    <td>{{ event.time|default(event.start_time) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No recent events</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-1"></i>
+                    Statistics
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-primary text-white h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="me-3">
+                                            <div class="text-white-75 small">Total Spawned</div>
+                                            <div class="text-lg fw-bold">{{ stats.total_drops|default(0) }}</div>
+                                        </div>
+                                        <i class="fas fa-archive fa-2x text-white-50"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-success text-white h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="me-3">
+                                            <div class="text-white-75 small">Total Caught</div>
+                                            <div class="text-lg fw-bold">{{ stats.total_claimed|default(0) }}</div>
+                                        </div>
+                                        <i class="fas fa-check-circle fa-2x text-white-50"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-warning text-white h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="me-3">
+                                            <div class="text-white-75 small">Total Escaped</div>
+                                            <div class="text-lg fw-bold">{{ stats.total_escaped|default(0) }}</div>
+                                        </div>
+                                        <i class="fas fa-exclamation-triangle fa-2x text-white-50"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-info text-white h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="me-3">
+                                            <div class="text-white-75 small">Unique Hunters</div>
+                                            <div class="text-lg fw-bold">{{ stats.participant_count|default(0) }}</div>
+                                        </div>
+                                        <i class="fas fa-users fa-2x text-white-50"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if top_hunters %}
+                    <div class="mt-4">
+                        <h5>Top Hunters</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Hunter</th>
+                                        <th class="text-center">Score</th>
+                                        <th class="text-center">Tribbles Caught</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for hunter in top_hunters %}
+                                    <tr>
+                                        <td>{{ hunter.username }}</td>
+                                        <td class="text-center"><span class="badge bg-info">{{ hunter.score }}</span></td>
+                                        <td class="text-center">{{ hunter.tribbles_caught }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mt-4 text-center">
+                        <p class="text-muted">No hunter data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-pie me-1"></i>
+                    Rarity Distribution
+                </div>
+                <div class="card-body" style="height: 350px;">
+                    <canvas id="rarityChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-chart-area me-1"></i>
+                    Activity (Last 48 Hours)
+                </div>
+                <div class="card-body" style="height: 350px;">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Store data in data attributes to avoid JS linter errors -->
+<div id="chart-data" 
+     data-rarity='{{ rarity_distribution|tojson }}' 
+     data-activity='{{ activity_data|tojson }}'>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get data from data attributes instead of directly in JS
+        const dataElement = document.getElementById('chart-data');
+        const rarityDataRaw = JSON.parse(dataElement.dataset.rarity || '[]');
+        const activityDataRaw = JSON.parse(dataElement.dataset.activity || '[]');
+        
+        // Process rarity data - handle both array and object formats
+        let rarityData = [];
+        
+        // Check if we received an array of objects with rarity and count properties
+        if (Array.isArray(rarityDataRaw) && rarityDataRaw.length > 0 && rarityDataRaw[0].hasOwnProperty('rarity')) {
+            rarityData = rarityDataRaw;
+        } 
+        // Check if we received a simple array of counts
+        else if (Array.isArray(rarityDataRaw)) {
+            // Convert array of values to array of objects with proper names
+            const rarityNames = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+            rarityData = rarityDataRaw.map((count, index) => ({
+                rarity: rarityNames[index] || `Rarity ${index+1}`,
+                count: count
+            })).filter(item => item.count > 0); // Only include non-zero values
+        }
+
+        // Rarity distribution chart
+        if (rarityData.length > 0) {
+            const labels = rarityData.map(item => item.rarity);
+            const counts = rarityData.map(item => item.count);
+            
+            // Define colors for different rarities
+            const backgroundColors = [
+                'rgba(151, 187, 205, 0.7)',   // Common - Light Blue
+                'rgba(70, 191, 189, 0.7)',    // Uncommon - Teal
+                'rgba(119, 99, 212, 0.7)',    // Rare - Purple
+                'rgba(224, 179, 66, 0.7)',    // Epic - Gold
+                'rgba(237, 85, 101, 0.7)',    // Legendary - Red
+            ];
+            
+            const borderColors = backgroundColors.map(color => color.replace('0.7', '1'));
+
+            const rarityCtx = document.getElementById('rarityChart').getContext('2d');
+            new Chart(rarityCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Count',
+                        data: counts,
+                        backgroundColor: backgroundColors.slice(0, labels.length),
+                        borderColor: borderColors.slice(0, labels.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 10,
+                            bottom: 10
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.parsed.y + ' tribbles';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                drawBorder: false
+                            },
+                            ticks: {
+                                precision: 0,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Activity chart
+        if (activityDataRaw && activityDataRaw.length > 0) {
+            const timeLabels = activityDataRaw.map(item => {
+                const date = new Date(item.time_period);
+                return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' });
+            });
+            
+            const totalCounts = activityDataRaw.map(item => item.total || 0);
+            const claimedCounts = activityDataRaw.map(item => item.claimed || 0);
+            const escapedCounts = activityDataRaw.map(item => item.escaped || 0);
+
+            const activityCtx = document.getElementById('activityChart').getContext('2d');
+            new Chart(activityCtx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [
+                        {
+                            label: 'Total Spawns',
+                            data: totalCounts,
+                            backgroundColor: 'rgba(70, 130, 180, 0.2)',
+                            borderColor: 'rgba(70, 130, 180, 1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'Claimed',
+                            data: claimedCounts,
+                            backgroundColor: 'rgba(46, 184, 92, 0.2)',
+                            borderColor: 'rgba(46, 184, 92, 1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'Escaped',
+                            data: escapedCounts,
+                            backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    layout: {
+                        padding: {
+                            top: 10,
+                            bottom: 10
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                padding: 20,
+                                boxWidth: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                drawBorder: false,
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                precision: 0,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        x: {
+                            display: true,
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 10,
+                                font: {
+                                    size: 10
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        } else {
+            // If no activity data, show a message
+            document.getElementById('activityChart').parentNode.innerHTML = 
+                '<div class="text-center py-5 text-muted"><em>No activity data available</em></div>';
+        }
+    });
+</script>
+{% endblock %} 
