@@ -296,21 +296,39 @@ def auth_callback():
 @login_required
 def logout():
     """Log out the user."""
+    # Get user_id before logging out for activity log
+    user_id = current_user.id if current_user.is_authenticated else None
+    
     # Log this logout to dashboard_logs
     try:
-        from models.db import log_activity
-        log_activity(
-            user_id=current_user.id,
-            action="logout",
-            details=f"User logged out",
-            ip_address=request.remote_addr
-        )
+        if user_id:
+            from models.db import log_activity
+            log_activity(
+                user_id=user_id,
+                action="logout",
+                details=f"User logged out",
+                ip_address=request.remote_addr
+            )
     except Exception as e:
         logger.error(f"Error logging user logout: {str(e)}")
     
+    # Clear the session first to avoid foreign key issues
+    session_id = session.sid if hasattr(session, 'sid') else None
+    
+    # Clear all session data
+    session.clear()
+    
+    # Log the user out of Flask-Login
     logout_user()
+    
     flash("You have been logged out successfully.", 'success')
-    return redirect(url_for('auth.login'))
+    response = redirect(url_for('auth.login'))
+    
+    # Also clear any cookies related to the session
+    response.delete_cookie('session')
+    response.delete_cookie('oauth2_state_backup')
+    
+    return response
 
 @auth_bp.route('/profile')
 @login_required
