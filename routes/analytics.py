@@ -328,9 +328,10 @@ def api_quiz_completions():
         return jsonify({'error': str(e)}), 500
 
 @analytics_bp.route('/tribbles')
+@analytics_bp.route('/tribbles/<int:duration>')
 @login_required
 @role_required(['analytics_viewer', 'admin'])
-def tribbles():
+def tribbles(duration=48):
     """Show tribble hunt analytics"""
     conn = get_db()
     events = []
@@ -340,25 +341,41 @@ def tribbles():
         'total_claimed': 0,
         'total_escaped': 0,
         'active_events': 0,
-        'participant_count': 0  # Added participant count
+        'participant_count': 0,  # Added participant count
+        'borg_captured': 0,
+        'borg_escaped': 0,
+        'current_event': {
+            'id': None,
+            'name': 'No Active Event',
+            'total_drops': 0,
+            'claimed': 0,
+            'escaped': 0
+        }
     }
-    rarity_distribution = [0, 0, 0, 0, 0]  # Common, Uncommon, Rare, Epic, Legendary
+    rarity_distribution = [0, 0, 0, 0]  # Common, Uncommon, Rare, Epic
     activity_data = []  # For activity chart
 
     try:
         with conn.cursor() as cursor:
-            # Get recent events
+            # Get recent events with detailed statistics
             cursor.execute("""
                 SELECT 
-                    id, event_id, active, start_time, end_time, 
-                    guild_id, event_name
-                FROM tribble_event
-                ORDER BY start_time DESC
+                    e.id, 
+                    e.event_name,
+                    e.start_time,
+                    e.end_time,
+                    COUNT(DISTINCT td.claimed_by) as participants,
+                    SUM(CASE WHEN td.claimed_by IS NOT NULL AND td.is_escaped = 0 THEN 1 ELSE 0 END) as captured,
+                    SUM(CASE WHEN td.is_escaped = 1 THEN 1 ELSE 0 END) as `escaped`
+                FROM tribble_event e
+                LEFT JOIN tribble_drops td ON e.id = td.event_id
+                GROUP BY e.id, e.event_name, e.start_time, e.end_time
+                ORDER BY e.start_time DESC
                 LIMIT 10
             """)
             events = cursor.fetchall()
             
-            # Count active events
+            # Get active events and details of the most recent active event
             cursor.execute("""
                 SELECT COUNT(*) as count
                 FROM tribble_event
@@ -367,13 +384,28 @@ def tribbles():
             active_events = cursor.fetchone()
             if active_events:
                 stats['active_events'] = active_events['count']
+                
+            # Get most recent active event for detailed stats
+            cursor.execute("""
+                SELECT id, event_name
+                FROM tribble_event
+                WHERE active = 1
+                ORDER BY start_time DESC
+                LIMIT 1
+            """)
+            current_event = cursor.fetchone()
+            if current_event:
+                stats['current_event']['id'] = current_event['id']
+                stats['current_event']['name'] = current_event['event_name'] or 'Active Event'
             
-            # Get drop statistics
+            # Get overall drop statistics - using the same approach as for top hunters
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total,
-                    SUM(CASE WHEN claimed_by IS NOT NULL THEN 1 ELSE 0 END) as claimed,
-                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
+                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as claimed,
+                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count,
+                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as borg_captured,
+                    SUM(CASE WHEN rarity = 4 AND is_escaped = 1 THEN 1 ELSE 0 END) as borg_escaped
                 FROM tribble_drops
             """)
             drop_stats = cursor.fetchone()
@@ -381,6 +413,25 @@ def tribbles():
                 stats['total_drops'] = drop_stats['total'] or 0
                 stats['total_claimed'] = drop_stats['claimed'] or 0
                 stats['total_escaped'] = drop_stats['escape_count'] or 0
+                stats['borg_captured'] = drop_stats['borg_captured'] or 0
+                stats['borg_escaped'] = drop_stats['borg_escaped'] or 0
+            
+            # Get event-specific statistics if we have a current event
+            if stats['current_event']['id']:
+                cursor.execute("""
+                    SELECT 
+                        COUNT(*) as total,
+                        COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as claimed,
+                        SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
+                    FROM tribble_drops
+                    WHERE event_id = %s
+                    AND claimed_by IS NOT NULL
+                """, (stats['current_event']['id'],))
+                event_stats = cursor.fetchone()
+                if event_stats:
+                    stats['current_event']['total_drops'] = event_stats['total'] or 0
+                    stats['current_event']['claimed'] = event_stats['claimed'] or 0
+                    stats['current_event']['escaped'] = event_stats['escape_count'] or 0
             
             # Count unique participants
             cursor.execute("""
@@ -406,51 +457,75 @@ def tribbles():
                 if 1 <= rarity_value <= 5:
                     rarity_distribution[rarity_value-1] = rarity['count']
             
-            # Get top hunters - use username column from tribble_scores directly
+            # Calculate total claimed tribbles directly from the tribble_drops table
             cursor.execute("""
                 SELECT 
-                    ts.user_id,
-                    COALESCE(ts.username, CONCAT('User ', ts.user_id)) as username,
-                    ts.score,
-                    COUNT(td.message_id) as tribbles_caught
-                FROM tribble_scores ts
-                LEFT JOIN tribble_drops td ON ts.user_id = td.claimed_by
-                GROUP BY ts.user_id, ts.username, ts.score
-                ORDER BY ts.score DESC
+                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as total_tribbles_caught,
+                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as total_borgs_caught
+                FROM tribble_drops
+                WHERE claimed_by IS NOT NULL
+            """)
+            total_stats = cursor.fetchone()
+            if total_stats:
+                stats['total_claimed'] = total_stats['total_tribbles_caught'] or 0
+                stats['borg_captured'] = total_stats['total_borgs_caught'] or 0
+            
+            # First get top hunters based on tribble_drops table only
+            cursor.execute("""
+                SELECT 
+                    claimed_by as user_id,
+                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as tribbles_caught,
+                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as borgs_caught
+                FROM tribble_drops
+                WHERE claimed_by IS NOT NULL
+                GROUP BY claimed_by
+                ORDER BY tribbles_caught DESC
                 LIMIT 10
             """)
             top_hunters_data = cursor.fetchall()
             
-            # Format hunter data
+            # Empty the list first to avoid duplicates
+            top_hunters = []
+            
+            # For each hunter, separately get the username to avoid multiplication effects
             for hunter in top_hunters_data:
+                user_id = hunter['user_id']
+                cursor.execute("""
+                    SELECT username FROM tribble_scores 
+                    WHERE user_id = %s 
+                    LIMIT 1
+                """, (user_id,))
+                username_result = cursor.fetchone()
+                username = username_result['username'] if username_result and username_result['username'] else f"User {user_id}"
+                
                 top_hunters.append({
-                    'username': hunter['username'],
-                    'score': hunter['score'],
-                    'tribbles_caught': hunter['tribbles_caught'] or 0
+                    'username': username,
+                    'tribbles_caught': hunter['tribbles_caught'] or 0,
+                    'borgs_caught': hunter['borgs_caught'] or 0
                 })
             
-            # Get activity data with hourly precision instead of just per day
+            # Get activity data with hourly precision for the specified duration
             cursor.execute("""
                 SELECT 
-                    DATE_FORMAT(captured_at, '%Y-%m-%d %H:00:00') as time_period,
+                    DATE_FORMAT(captured_at, '%%Y-%%m-%%d %%H:00:00') as time_period,
                     COUNT(*) as total,
-                    SUM(CASE WHEN claimed_by IS NOT NULL THEN 1 ELSE 0 END) as claimed,
-                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
+                    SUM(CASE WHEN claimed_by IS NOT NULL AND is_escaped = 0 THEN 1 ELSE 0 END) as claimed,
+                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as `escaped`
                 FROM tribble_drops
                 WHERE captured_at IS NOT NULL
+                AND captured_at >= DATE_SUB(NOW(), INTERVAL %s HOUR)
                 GROUP BY time_period
-                ORDER BY time_period DESC
-                LIMIT 48
-            """)
+                ORDER BY time_period ASC
+            """, (duration,))
             activity_results = cursor.fetchall()
             
-            # Reverse the results to show oldest to newest
-            for result in reversed(activity_results):
+            # Process the activity data
+            for result in activity_results:
                 activity_data.append({
                     'time_period': result['time_period'],
                     'total': result['total'],
                     'claimed': result['claimed'] or 0,
-                    'escaped': result['escape_count'] or 0
+                    'escaped': result['escaped'] or 0
                 })
                 
     except Exception as e:

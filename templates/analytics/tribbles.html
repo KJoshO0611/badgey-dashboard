@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends 'layout.html' %}
 
 {% block title %}Tribble Hunt Analytics - Badgey Dashboard{% endblock %}
 
@@ -14,36 +14,42 @@
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-table me-1"></i>
+                    <i class="fas fa-calendar-alt me-1"></i>
                     Recent Events
                 </div>
                 <div class="card-body">
-                    <table class="table table-striped table-sm">
-                        <thead>
-                            <tr>
-                                <th>Event</th>
-                                <th>Tribble</th>
-                                <th>User</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if events %}
-                                {% for event in events %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
                                 <tr>
-                                    <td>{{ event.event_type|default('Spawn') }}</td>
-                                    <td>{{ event.rarity|default('Unknown') }} {{ event.emoji|default('🦔') }}</td>
-                                    <td>{{ event.claimed_by|default('N/A') }}</td>
-                                    <td>{{ event.time|default(event.start_time) }}</td>
+                                    <th>Name</th>
+                                    <th>Start</th>
+                                    <th>End</th>
+                                    <th class="text-center">Participants</th>
+                                    <th class="text-center">Captured</th>
+                                    <th class="text-center">Escaped</th>
                                 </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="4" class="text-center">No recent events</td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {% if events %}
+                                    {% for event in events %}
+                                    <tr>
+                                        <td><strong>{{ event.event_name }}</strong></td>
+                                        <td>{{ event.start_time|default('-') }}</td>
+                                        <td>{{ event.end_time|default('-') }}</td>
+                                        <td class="text-center">{{ event.participants|default(0) }}</td>
+                                        <td class="text-center text-success">{{ event.captured|default(0) }}</td>
+                                        <td class="text-center text-warning">{{ event.escaped|default(0) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center">No recent events</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -55,6 +61,7 @@
                     Statistics
                 </div>
                 <div class="card-body">
+                    <!-- Overall Statistics -->
                     <div class="row">
                         <div class="col-md-3 mb-3">
                             <div class="card bg-primary text-white h-100">
@@ -109,25 +116,60 @@
                             </div>
                         </div>
                     </div>
+                    
+
+                    
+                    <!-- Borg Stats -->
+                    <div class="mt-4 mb-3">
+                        <h5><i class="fas fa-robot me-1"></i> Borg Statistics</h5>
+                        <div class="row mt-3">
+                            <div class="col-md-6 mb-3">
+                                <div class="card border-dark h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="me-3">
+                                                <div class="text-muted">Borgs Captured</div>
+                                                <div class="display-6 fw-bold text-dark">{{ stats.borg_captured|default(0) }}</div>
+                                            </div>
+                                            <i class="fas fa-robot fa-3x text-dark opacity-25"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <div class="card border-danger h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="me-3">
+                                                <div class="text-muted">Borgs Escaped</div>
+                                                <div class="display-6 fw-bold text-danger">{{ stats.borg_escaped|default(0) }}</div>
+                                            </div>
+                                            <i class="fas fa-skull fa-3x text-danger opacity-25"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     {% if top_hunters %}
                     <div class="mt-4">
-                        <h5>Top Hunters</h5>
+                        <h5><i class="fas fa-trophy me-1"></i> Top Hunters</h5>
                         <div class="table-responsive">
-                            <table class="table table-sm table-hover">
+                            <table class="table table-hover">
                                 <thead>
                                     <tr>
                                         <th>Hunter</th>
-                                        <th class="text-center">Score</th>
                                         <th class="text-center">Tribbles Caught</th>
+                                        <th class="text-center">Borgs Captured</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for hunter in top_hunters %}
                                     <tr>
-                                        <td>{{ hunter.username }}</td>
-                                        <td class="text-center"><span class="badge bg-info">{{ hunter.score }}</span></td>
-                                        <td class="text-center">{{ hunter.tribbles_caught }}</td>
+                                        <td><strong>{{ hunter.username }}</strong></td>
+                                        <td class="text-center text-primary">{{ hunter.tribbles_caught }}</td>
+                                        <td class="text-center text-dark">{{ hunter.borgs_caught }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -158,9 +200,17 @@
         </div>
         <div class="col-xl-6">
             <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-chart-area me-1"></i>
-                    Activity (Last 48 Hours)
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-chart-area me-1"></i>
+                        <span id="activity-title">Activity (Last 48 Hours)</span>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="Time period selector">
+                        <a href="{{ url_for('analytics.tribbles', duration=24) }}" class="btn btn-sm btn-outline-primary time-filter" data-hours="24">24h</a>
+                        <a href="{{ url_for('analytics.tribbles', duration=48) }}" class="btn btn-sm btn-outline-primary time-filter active" data-hours="48">48h</a>
+                        <a href="{{ url_for('analytics.tribbles', duration=168) }}" class="btn btn-sm btn-outline-primary time-filter" data-hours="168">7d</a>
+                        <a href="{{ url_for('analytics.tribbles', duration=720) }}" class="btn btn-sm btn-outline-primary time-filter" data-hours="720">30d</a>
+                    </div>
                 </div>
                 <div class="card-body" style="height: 350px;">
                     <canvas id="activityChart"></canvas>
@@ -171,49 +221,71 @@
 </div>
 <!-- Store data in data attributes to avoid JS linter errors -->
 <div id="chart-data" 
-     data-rarity='{{ rarity_distribution|tojson }}' 
-     data-activity='{{ activity_data|tojson }}'>
+     data-rarity='{{ rarity_distribution|tojson|safe }}' 
+     data-activity='{{ activity_data|tojson|safe }}'>
 </div>
 {% endblock %}
 
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% block extra_js %}
+<!-- Use Chart.js version compatible with layout.html -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Highlight the active time filter button based on the current URL
+        const currentUrl = window.location.pathname;
+        const duration = currentUrl.match(/\/tribbles\/(\d+)/) ? currentUrl.match(/\/tribbles\/(\d+)/)[1] : '48';
+        document.querySelectorAll('.time-filter').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-hours') === duration) {
+                btn.classList.add('active');
+                document.getElementById('activity-title').textContent = `Activity (Last ${btn.textContent})`;
+            }
+        });
         // Get data from data attributes instead of directly in JS
         const dataElement = document.getElementById('chart-data');
-        const rarityDataRaw = JSON.parse(dataElement.dataset.rarity || '[]');
-        const activityDataRaw = JSON.parse(dataElement.dataset.activity || '[]');
+        let rarityDataRaw, activityDataRaw;
+        
+        try {
+            rarityDataRaw = JSON.parse(dataElement.dataset.rarity || '[]');
+            activityDataRaw = JSON.parse(dataElement.dataset.activity || '[]');
+            console.log('Rarity data:', rarityDataRaw);
+            console.log('Activity data:', activityDataRaw);
+        } catch (error) {
+            console.error('Error parsing chart data:', error);
+            rarityDataRaw = [];
+            activityDataRaw = [];
+        }
         
         // Process rarity data - handle both array and object formats
         let rarityData = [];
         
         // Check if we received an array of objects with rarity and count properties
-        if (Array.isArray(rarityDataRaw) && rarityDataRaw.length > 0 && rarityDataRaw[0].hasOwnProperty('rarity')) {
+        if (Array.isArray(rarityDataRaw) && rarityDataRaw.length > 0 && rarityDataRaw[0] && rarityDataRaw[0].hasOwnProperty('rarity')) {
             rarityData = rarityDataRaw;
         } 
         // Check if we received a simple array of counts
         else if (Array.isArray(rarityDataRaw)) {
             // Convert array of values to array of objects with proper names
-            const rarityNames = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+            const rarityNames = ['Common', 'Uncommon', 'Rare', 'Borg'];
             rarityData = rarityDataRaw.map((count, index) => ({
                 rarity: rarityNames[index] || `Rarity ${index+1}`,
-                count: count
+                count: parseInt(count) || 0
             })).filter(item => item.count > 0); // Only include non-zero values
         }
+        
+        console.log('Processed rarity data:', rarityData);
 
         // Rarity distribution chart
-        if (rarityData.length > 0) {
+        if (rarityData && rarityData.length > 0) {
             const labels = rarityData.map(item => item.rarity);
-            const counts = rarityData.map(item => item.count);
+            const counts = rarityData.map(item => parseInt(item.count) || 0);
             
             // Define colors for different rarities
             const backgroundColors = [
                 'rgba(151, 187, 205, 0.7)',   // Common - Light Blue
                 'rgba(70, 191, 189, 0.7)',    // Uncommon - Teal
                 'rgba(119, 99, 212, 0.7)',    // Rare - Purple
-                'rgba(224, 179, 66, 0.7)',    // Epic - Gold
-                'rgba(237, 85, 101, 0.7)',    // Legendary - Red
+                'rgba(224, 179, 66, 0.7)',    // Borg - Gold
             ];
             
             const borderColors = backgroundColors.map(color => color.replace('0.7', '1'));
@@ -281,15 +353,25 @@
         }
 
         // Activity chart
-        if (activityDataRaw && activityDataRaw.length > 0) {
+        if (activityDataRaw && Array.isArray(activityDataRaw) && activityDataRaw.length > 0) {
             const timeLabels = activityDataRaw.map(item => {
-                const date = new Date(item.time_period);
-                return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' });
+                try {
+                    if (!item || !item.time_period) {
+                        return 'Unknown';
+                    }
+                    const date = new Date(item.time_period);
+                    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit' });
+                } catch (e) {
+                    console.error('Error formatting date:', e);
+                    return 'Invalid date';
+                }
             });
             
-            const totalCounts = activityDataRaw.map(item => item.total || 0);
-            const claimedCounts = activityDataRaw.map(item => item.claimed || 0);
-            const escapedCounts = activityDataRaw.map(item => item.escaped || 0);
+            const totalCounts = activityDataRaw.map(item => parseInt(item?.total) || 0);
+            const claimedCounts = activityDataRaw.map(item => parseInt(item?.claimed) || 0);
+            const escapedCounts = activityDataRaw.map(item => parseInt(item?.escaped) || 0);
+            
+            console.log('Chart data prepared:', { timeLabels, totalCounts, claimedCounts, escapedCounts });
 
             const activityCtx = document.getElementById('activityChart').getContext('2d');
             new Chart(activityCtx, {
@@ -394,9 +476,21 @@
             });
         } else {
             // If no activity data, show a message
-            document.getElementById('activityChart').parentNode.innerHTML = 
-                '<div class="text-center py-5 text-muted"><em>No activity data available</em></div>';
+            const activityElement = document.getElementById('activityChart');
+            if (activityElement && activityElement.parentNode) {
+                activityElement.parentNode.innerHTML = 
+                    '<div class="text-center py-5 text-muted"><em>No activity data available</em></div>';
+            }
+        }
+        
+        // Similarly, handle the case where rarity chart might be missing
+        if (!rarityData || rarityData.length === 0) {
+            const rarityElement = document.getElementById('rarityChart');
+            if (rarityElement && rarityElement.parentNode) {
+                rarityElement.parentNode.innerHTML = 
+                    '<div class="text-center py-5 text-muted"><em>No rarity data available</em></div>';
+            }
         }
     });
 </script>
-{% endblock %} 
+{% endblock %}
