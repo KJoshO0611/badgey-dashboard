@@ -10,50 +10,8 @@
         <li class="breadcrumb-item active">Tribble Hunt Analytics</li>
     </ol>
 
+    <!-- First row: Statistics and Rarity Distribution -->
     <div class="row">
-        <div class="col-xl-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-calendar-alt me-1"></i>
-                    Recent Events
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Start</th>
-                                    <th>End</th>
-                                    <th class="text-center">Participants</th>
-                                    <th class="text-center">Captured</th>
-                                    <th class="text-center">Escaped</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% if events %}
-                                    {% for event in events %}
-                                    <tr>
-                                        <td><strong>{{ event.event_name }}</strong></td>
-                                        <td>{{ event.start_time|default('-') }}</td>
-                                        <td>{{ event.end_time|default('-') }}</td>
-                                        <td class="text-center">{{ event.participants|default(0) }}</td>
-                                        <td class="text-center text-success">{{ event.captured|default(0) }}</td>
-                                        <td class="text-center text-warning">{{ event.escaped|default(0) }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                {% else %}
-                                    <tr>
-                                        <td colspan="6" class="text-center">No recent events</td>
-                                    </tr>
-                                {% endif %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
@@ -152,41 +110,10 @@
                         </div>
                     </div>
 
-                    {% if top_hunters %}
-                    <div class="mt-4">
-                        <h5><i class="fas fa-trophy me-1"></i> Top Hunters</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Hunter</th>
-                                        <th class="text-center">Tribbles Caught</th>
-                                        <th class="text-center">Borgs Captured</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for hunter in top_hunters %}
-                                    <tr>
-                                        <td><strong>{{ hunter.username }}</strong></td>
-                                        <td class="text-center text-primary">{{ hunter.tribbles_caught }}</td>
-                                        <td class="text-center text-dark">{{ hunter.borgs_caught }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    {% else %}
-                    <div class="mt-4 text-center">
-                        <p class="text-muted">No hunter data available</p>
-                    </div>
-                    {% endif %}
+                    <!-- Top Hunters moved to bottom of page -->
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="row">
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
@@ -198,7 +125,57 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-6">
+    </div>
+    
+    <!-- Second row: Recent Events (full width) -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-calendar-alt me-1"></i>
+                    Recent Events
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Start</th>
+                                    <th>End</th>
+                                    <th class="text-center">Participants</th>
+                                    <th class="text-center">Captured</th>
+                                    <th class="text-center">Escaped</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if events %}
+                                    {% for event in events %}
+                                    <tr>
+                                        <td><strong>{{ event.event_name }}</strong></td>
+                                        <td>{{ event.start_time|default('-') }}</td>
+                                        <td>{{ event.end_time|default('-') }}</td>
+                                        <td class="text-center">{{ event.participants|default(0) }}</td>
+                                        <td class="text-center text-success">{{ event.captured|default(0) }}</td>
+                                        <td class="text-center text-warning">{{ event.escaped|default(0) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="6" class="text-center">No recent events</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Third row: Activity chart (full width) -->
+    <div class="row">
+        <div class="col-12">
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
@@ -218,6 +195,64 @@
             </div>
         </div>
     </div>
+    
+    <!-- Fourth row: Top Hunters (full width) -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-trophy me-1"></i> Top Hunters
+                    </div>
+                    <div>
+                        <form class="d-flex" id="event-filter-form">
+                            <label for="event-filter" class="form-label me-2 mb-0 d-flex align-items-center">Filter by Event:</label>
+                            <select class="form-select form-select-sm" id="event-filter" name="event_id" aria-label="Filter by event">
+                                <option value="">All Events</option>
+                                {% for event in all_events %}
+                                <option value="{{ event.id }}" {% if current_event_id == event.id %}selected{% endif %}>
+                                    {{ event.event_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if top_hunters %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Hunter</th>
+                                    <th class="text-center">Tribbles Caught</th>
+                                    <th class="text-center">Borgs Captured</th>
+                                    <th class="text-center">Borgs Escaped</th>
+                                    <th class="text-center">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for hunter in top_hunters %}
+                                <tr>
+                                    <td><strong>{{ hunter.username }}</strong></td>
+                                    <td class="text-center text-primary">{{ hunter.tribbles_caught }}</td>
+                                    <td class="text-center text-dark">{{ hunter.borgs_caught }}</td>
+                                    <td class="text-center text-danger">{{ hunter.borgs_escaped }}</td>
+                                    <td class="text-center text-success">{{ hunter.score }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center">
+                        <p class="text-muted">No hunter data available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 <!-- Store data in data attributes to avoid JS linter errors -->
 <div id="chart-data" 
@@ -233,7 +268,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Highlight the active time filter button based on the current URL
         const currentUrl = window.location.pathname;
-        const duration = currentUrl.match(/\/tribbles\/(\d+)/) ? currentUrl.match(/\/tribbles\/(\d+)/)[1] : '48';
+        const durationMatch = currentUrl.match(/\/tribbles\/(\d+)/);
+        const duration = durationMatch ? durationMatch[1] : '48';
         document.querySelectorAll('.time-filter').forEach(btn => {
             btn.classList.remove('active');
             if (btn.getAttribute('data-hours') === duration) {
@@ -241,6 +277,25 @@
                 document.getElementById('activity-title').textContent = `Activity (Last ${btn.textContent})`;
             }
         });
+        
+        // Handle event filter dropdown changes
+        const eventFilter = document.getElementById('event-filter');
+        if (eventFilter) {
+            eventFilter.addEventListener('change', function() {
+                const selectedEventId = this.value;
+                let newUrl;
+                
+                if (selectedEventId) {
+                    // If an event is selected, navigate to the filtered URL
+                    newUrl = `/analytics/tribbles/${duration}/${selectedEventId}`;
+                } else {
+                    // If 'All Events' is selected, go back to unfiltered view
+                    newUrl = `/analytics/tribbles/${duration}`;
+                }
+                
+                window.location.href = newUrl;
+            });
+        }
         // Get data from data attributes instead of directly in JS
         const dataElement = document.getElementById('chart-data');
         let rarityDataRaw, activityDataRaw;

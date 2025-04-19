@@ -329,9 +329,10 @@ def api_quiz_completions():
 
 @analytics_bp.route('/tribbles')
 @analytics_bp.route('/tribbles/<int:duration>')
+@analytics_bp.route('/tribbles/<int:duration>/<int:event_id>')
 @login_required
 @role_required(['analytics_viewer', 'admin'])
-def tribbles(duration=48):
+def tribbles(duration=48, event_id=None):
     """Show tribble hunt analytics"""
     conn = get_db()
     events = []
@@ -484,12 +485,44 @@ def tribbles(duration=48):
             """)
             top_hunters_data = cursor.fetchall()
             
+            # Get all events for the filter dropdown
+            cursor.execute("""
+                SELECT id, event_name FROM tribble_event ORDER BY start_time DESC
+            """)
+            all_events = cursor.fetchall()
+            
+            # Build event filter condition based on event_id
+            event_filter = ""
+            event_params = ()
+            
+            if event_id:
+                event_filter = "AND td.event_id = %s"
+                event_params = (event_id,)
+            
+            # Get user IDs for top hunters first
+            cursor.execute(f"""
+                SELECT 
+                    td.claimed_by as user_id,
+                    COUNT(CASE WHEN td.is_escaped = 0 THEN td.message_id ELSE NULL END) as tribbles_caught,
+                    SUM(CASE WHEN td.rarity = 4 AND td.is_escaped = 0 THEN 1 ELSE 0 END) as borgs_caught,
+                    SUM(CASE WHEN td.rarity = 4 AND td.is_escaped = 1 THEN 1 ELSE 0 END) as borgs_escaped
+                FROM tribble_drops td
+                WHERE td.claimed_by IS NOT NULL
+                {event_filter}
+                GROUP BY td.claimed_by
+                ORDER BY tribbles_caught DESC
+                LIMIT 10
+            """, event_params)
+            top_hunters_data = cursor.fetchall()
+            
             # Empty the list first to avoid duplicates
             top_hunters = []
             
-            # For each hunter, separately get the username to avoid multiplication effects
+            # For each hunter, get their correct score and username separately
             for hunter in top_hunters_data:
                 user_id = hunter['user_id']
+                
+                # Get username
                 cursor.execute("""
                     SELECT username FROM tribble_scores 
                     WHERE user_id = %s 
@@ -498,10 +531,24 @@ def tribbles(duration=48):
                 username_result = cursor.fetchone()
                 username = username_result['username'] if username_result and username_result['username'] else f"User {user_id}"
                 
+                # Get score - filtered by event if needed
+                score_query = "SELECT SUM(score) as total_score FROM tribble_scores WHERE user_id = %s"
+                score_params = [user_id]
+                
+                if event_id:
+                    score_query += " AND event_id = %s"
+                    score_params.append(event_id)
+                
+                cursor.execute(score_query, score_params)
+                score_result = cursor.fetchone()
+                score = score_result['total_score'] if score_result and score_result['total_score'] else 0
+                
                 top_hunters.append({
                     'username': username,
                     'tribbles_caught': hunter['tribbles_caught'] or 0,
-                    'borgs_caught': hunter['borgs_caught'] or 0
+                    'borgs_caught': hunter['borgs_caught'] or 0,
+                    'borgs_escaped': hunter['borgs_escaped'] or 0,
+                    'score': score
                 })
             
             # Get activity data with hourly precision for the specified duration
@@ -534,11 +581,13 @@ def tribbles(duration=48):
 
     return render_template(
         'analytics/tribbles.html',
-        events=events,
-        top_hunters=top_hunters,
         stats=stats,
+        events=events,
+        activity_data=activity_data,
         rarity_distribution=rarity_distribution,
-        activity_data=activity_data
+        top_hunters=top_hunters,
+        all_events=all_events,
+        current_event_id=event_id
     )
 
 # Helper functions for analytics data
