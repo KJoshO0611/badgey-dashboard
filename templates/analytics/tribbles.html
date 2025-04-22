@@ -27,7 +27,7 @@
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div class="me-3">
                                             <div class="text-white-75 small">Total Spawned</div>
-                                            <div class="text-lg fw-bold">{{ stats.total_drops|default(0) }}</div>
+                                            <div class="text-lg fw-bold">{{ stats.total_spawned|default(0) }}</div>
                                         </div>
                                         <i class="fas fa-archive fa-2x text-white-50"></i>
                                     </div>
@@ -96,14 +96,12 @@
                             </div>
                             <div class="col-md-6 mb-3">
                                 <div class="card border-danger h-100">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div class="me-3">
-                                                <div class="text-muted">Borgs Escaped</div>
-                                                <div class="display-6 fw-bold text-danger">{{ stats.borg_escaped|default(0) }}</div>
-                                            </div>
-                                            <i class="fas fa-skull fa-3x text-danger opacity-25"></i>
+                                    <div class="card-body d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <div class="text-muted">Assasimilated</div>
+                                            <div class="display-5 fw-bold">{{ stats.borg_escaped|default(0) }}</div>
                                         </div>
+                                        <i class="fas fa-skull fa-3x text-danger"></i>
                                     </div>
                                 </div>
                             </div>
@@ -237,7 +235,7 @@
                                     <td><strong>{{ hunter.username }}</strong></td>
                                     <td class="text-center text-primary">{{ hunter.tribbles_caught }}</td>
                                     <td class="text-center text-dark">{{ hunter.borgs_caught }}</td>
-                                    <td class="text-center text-danger">{{ hunter.borgs_escaped }}</td>
+                                    <td class="text-center text-danger">{{ hunter.borgs_defeated }}</td>
                                     <td class="text-center text-success">{{ hunter.score }}</td>
                                 </tr>
                                 {% endfor %}

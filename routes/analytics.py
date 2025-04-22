@@ -345,6 +345,7 @@ def tribbles(duration=48, event_id=None):
         'participant_count': 0,  # Added participant count
         'borg_captured': 0,
         'borg_escaped': 0,
+        'borg_defeated': 0,
         'current_event': {
             'id': None,
             'name': 'No Active Event',
@@ -399,23 +400,29 @@ def tribbles(duration=48, event_id=None):
                 stats['current_event']['id'] = current_event['id']
                 stats['current_event']['name'] = current_event['event_name'] or 'Active Event'
             
-            # Get overall drop statistics - using the same approach as for top hunters
+            # Get total spawned (all tribbles)
+            cursor.execute("SELECT COUNT(*) as total_spawned FROM tribble_drops")
+            spawned_stats = cursor.fetchone()
+            stats['total_spawned'] = spawned_stats['total_spawned'] if spawned_stats else 0
+
+            # Calculate total claimed tribbles, total escaped, and borg stats using new columns
             cursor.execute("""
                 SELECT 
-                    COUNT(*) as total,
-                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as claimed,
-                    SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count,
-                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as borg_captured,
-                    SUM(CASE WHEN rarity = 4 AND is_escaped = 1 THEN 1 ELSE 0 END) as borg_escaped
+                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as total_tribbles_caught,
+                    COUNT(CASE WHEN is_escaped = 1 THEN message_id ELSE NULL END) as total_tribbles_escaped,
+                    SUM(CASE WHEN is_borg = 1 AND was_defeated = 1 THEN 1 ELSE 0 END) as total_borgs_defeated,
+                    SUM(CASE WHEN is_borg = 1 AND is_escaped = 1 THEN 1 ELSE 0 END) as total_borgs_escaped_real,
+                    SUM(CASE WHEN is_borg = 1 AND claimed_by IS NOT NULL AND is_escaped = 0 AND was_defeated = 0 THEN 1 ELSE 0 END) as total_borgs_caught
                 FROM tribble_drops
+                WHERE claimed_by IS NOT NULL OR is_escaped = 1 OR (is_borg = 1 AND was_defeated = 1)
             """)
-            drop_stats = cursor.fetchone()
-            if drop_stats:
-                stats['total_drops'] = drop_stats['total'] or 0
-                stats['total_claimed'] = drop_stats['claimed'] or 0
-                stats['total_escaped'] = drop_stats['escape_count'] or 0
-                stats['borg_captured'] = drop_stats['borg_captured'] or 0
-                stats['borg_escaped'] = drop_stats['borg_escaped'] or 0
+            total_stats = cursor.fetchone()
+            if total_stats:
+                stats['total_claimed'] = total_stats['total_tribbles_caught'] or 0
+                stats['total_escaped'] = total_stats['total_tribbles_escaped'] or 0
+                # For Borgs Escaped, show count of was_defeated = 1
+                stats['borg_escaped'] = total_stats['total_borgs_defeated'] or 0
+                stats['borg_captured'] = total_stats['total_borgs_caught'] or 0
             
             # Get event-specific statistics if we have a current event
             if stats['current_event']['id']:
@@ -426,7 +433,7 @@ def tribbles(duration=48, event_id=None):
                         SUM(CASE WHEN is_escaped = 1 THEN 1 ELSE 0 END) as escape_count
                     FROM tribble_drops
                     WHERE event_id = %s
-                    AND claimed_by IS NOT NULL
+                    AND claimed_by IS NOT NULL OR is_escaped = 1 OR (is_borg = 1 AND was_defeated = 1)
                 """, (stats['current_event']['id'],))
                 event_stats = cursor.fetchone()
                 if event_stats:
@@ -458,25 +465,14 @@ def tribbles(duration=48, event_id=None):
                 if 1 <= rarity_value <= 5:
                     rarity_distribution[rarity_value-1] = rarity['count']
             
-            # Calculate total claimed tribbles directly from the tribble_drops table
-            cursor.execute("""
-                SELECT 
-                    COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as total_tribbles_caught,
-                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as total_borgs_caught
-                FROM tribble_drops
-                WHERE claimed_by IS NOT NULL
-            """)
-            total_stats = cursor.fetchone()
-            if total_stats:
-                stats['total_claimed'] = total_stats['total_tribbles_caught'] or 0
-                stats['borg_captured'] = total_stats['total_borgs_caught'] or 0
-            
             # First get top hunters based on tribble_drops table only
             cursor.execute("""
                 SELECT 
                     claimed_by as user_id,
                     COUNT(CASE WHEN is_escaped = 0 THEN message_id ELSE NULL END) as tribbles_caught,
-                    SUM(CASE WHEN rarity = 4 AND is_escaped = 0 THEN 1 ELSE 0 END) as borgs_caught
+                    SUM(CASE WHEN is_borg = 1 AND was_defeated = 1 THEN 1 ELSE 0 END) as borgs_defeated,
+                    SUM(CASE WHEN is_borg = 1 AND is_escaped = 1 THEN 1 ELSE 0 END) as borgs_escaped,
+                    SUM(CASE WHEN is_borg = 1 AND claimed_by IS NOT NULL AND is_escaped = 0 AND was_defeated = 0 THEN 1 ELSE 0 END) as borgs_caught
                 FROM tribble_drops
                 WHERE claimed_by IS NOT NULL
                 GROUP BY claimed_by
@@ -504,8 +500,9 @@ def tribbles(duration=48, event_id=None):
                 SELECT 
                     td.claimed_by as user_id,
                     COUNT(CASE WHEN td.is_escaped = 0 THEN td.message_id ELSE NULL END) as tribbles_caught,
-                    SUM(CASE WHEN td.rarity = 4 AND td.is_escaped = 0 THEN 1 ELSE 0 END) as borgs_caught,
-                    SUM(CASE WHEN td.rarity = 4 AND td.is_escaped = 1 THEN 1 ELSE 0 END) as borgs_escaped
+                    SUM(CASE WHEN td.is_borg = 1 AND td.was_defeated = 1 THEN 1 ELSE 0 END) as borgs_defeated,
+                    SUM(CASE WHEN td.is_borg = 1 AND td.is_escaped = 1 THEN 1 ELSE 0 END) as borgs_escaped,
+                    SUM(CASE WHEN td.is_borg = 1 AND td.claimed_by IS NOT NULL AND td.is_escaped = 0 AND td.was_defeated = 0 THEN 1 ELSE 0 END) as borgs_caught
                 FROM tribble_drops td
                 WHERE td.claimed_by IS NOT NULL
                 {event_filter}
@@ -546,8 +543,9 @@ def tribbles(duration=48, event_id=None):
                 top_hunters.append({
                     'username': username,
                     'tribbles_caught': hunter['tribbles_caught'] or 0,
-                    'borgs_caught': hunter['borgs_caught'] or 0,
+                    'borgs_defeated': hunter['borgs_defeated'] or 0,
                     'borgs_escaped': hunter['borgs_escaped'] or 0,
+                    'borgs_caught': hunter['borgs_caught'] or 0,
                     'score': score
                 })
             
@@ -579,13 +577,16 @@ def tribbles(duration=48, event_id=None):
         logger.error(f"Error fetching tribble hunt analytics: {e}", exc_info=True)
         flash("An error occurred while fetching tribble hunt analytics.", "danger")
 
+    stats['total_drops'] = stats['total_spawned'] # Update total_drops
     return render_template(
         'analytics/tribbles.html',
         stats=stats,
         events=events,
-        activity_data=activity_data,
-        rarity_distribution=rarity_distribution,
         top_hunters=top_hunters,
+        duration=duration,
+        event_id=event_id,
+        rarity_distribution=rarity_distribution,
+        activity_data=activity_data,
         all_events=all_events,
         current_event_id=event_id
     )
@@ -713,7 +714,6 @@ def get_top_quizzes(limit=10):
     except Exception as e:
         logger.error(f"Error getting top quizzes: {e}", exc_info=True)
         return []
-
 
 def get_recent_activity(limit=10):
     """Get recent quiz activity"""
