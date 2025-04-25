@@ -36,6 +36,11 @@
                 <label for="quiz_name" class="form-label">Quiz Name</label>
                 <input type="text" class="form-control" id="quiz_name" name="quiz_name" value="{{ quiz.name }}" required>
             </div>
+            <div class="mb-3">
+                <label for="question_limit" class="form-label">Question Limit</label>
+                <input type="number" class="form-control" id="question_limit" name="question_limit" value="{{ quiz.question_limit or '' }}" min="1" required>
+                <div class="form-text">Set the maximum number of questions allowed in this quiz.</div>
+            </div>
             
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                 <button type="submit" class="btn btn-primary">Save Changes</button>

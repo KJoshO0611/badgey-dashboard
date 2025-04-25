@@ -12,12 +12,13 @@ class QuizNotFoundError(Exception):
 class Quiz:
     """Quiz model for quiz management"""
     
-    def __init__(self, id, name, creator_id, created_at=None, creator_username=None):
+    def __init__(self, id, name, creator_id, created_at=None, creator_username=None, question_limit=None):
         self.id = id
         self.name = name
         self.creator_id = creator_id
         self.created_at = created_at or datetime.now()
         self.creator_username = creator_username
+        self.question_limit = question_limit
     
     @property
     def quiz_id(self):
@@ -47,6 +48,7 @@ class Quiz:
                 'creator_id': self.creator_id,
                 'creator_username': self.creator_username,
                 'created_at': created_at_iso,
+                'question_limit': self.question_limit,
                 # Include question_count if it exists
                 'question_count': getattr(self, 'question_count', None)
             }
@@ -83,7 +85,8 @@ class Quiz:
                     name=quiz_data['quiz_name'],
                     creator_id=quiz_data['creator_id'],
                     created_at=created_at,
-                    creator_username=quiz_data.get('creator_username')
+                    creator_username=quiz_data.get('creator_username'),
+                    question_limit=quiz_data.get('question_limit')
                 )
         except Exception as e:
             if isinstance(e, QuizNotFoundError):
@@ -114,7 +117,8 @@ class Quiz:
                         name=quiz_data['quiz_name'],
                         creator_id=quiz_data['creator_id'],
                         created_at=created_at,
-                        creator_username=quiz_data.get('creator_username')
+                        creator_username=quiz_data.get('creator_username'),
+                        question_limit=quiz_data.get('question_limit')
                     ))
                 
                 return result
@@ -147,7 +151,8 @@ class Quiz:
                         name=quiz_data['quiz_name'],
                         creator_id=quiz_data['creator_id'],
                         created_at=created_at,
-                        creator_username=quiz_data.get('creator_username')
+                        creator_username=quiz_data.get('creator_username'),
+                        question_limit=quiz_data.get('question_limit')
                     ))
                 
                 return result
@@ -157,7 +162,7 @@ class Quiz:
             return []
     
     @staticmethod
-    def create(name, creator_id, creator_username=None):
+    def create(name, creator_id, creator_username=None, question_limit=None):
         """Create a new quiz"""
         try:
             # Don't import from app directly - use get_cache helper
@@ -179,8 +184,8 @@ class Quiz:
                         logger.error(f"Error fetching username: {e}")
                         creator_username = str(creator_id)
                 
-                query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username) VALUES (%s, %s, %s)"
-                cursor.execute(query, (name, creator_id, creator_username))
+                query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username, question_limit) VALUES (%s, %s, %s, %s)"
+                cursor.execute(query, (name, creator_id, creator_username, question_limit))
                 conn.commit()
                 
                 # Get the inserted ID
@@ -202,7 +207,8 @@ class Quiz:
                     name=name,
                     creator_id=creator_id,
                     created_at=datetime.now(),
-                    creator_username=creator_username
+                    creator_username=creator_username,
+                    question_limit=question_limit
                 )
         except Exception as e:
             import logging
@@ -210,7 +216,7 @@ class Quiz:
             logger.error(f"Error creating quiz: {e}", exc_info=True)
             raise
     
-    def update(self, name):
+    def update(self, name, question_limit=None):
         """Update quiz details"""
         try:
             # Don't import from app directly - use get_cache helper
@@ -220,12 +226,13 @@ class Quiz:
             
             conn = get_db()
             with conn.cursor() as cursor:
-                query = "UPDATE quizzes SET quiz_name = %s WHERE quiz_id = %s"
-                cursor.execute(query, (name, self.id))
+                query = "UPDATE quizzes SET quiz_name = %s, question_limit = %s WHERE quiz_id = %s"
+                cursor.execute(query, (name, question_limit, self.id))
                 conn.commit()
                 
                 # Update object property
                 self.name = name
+                self.question_limit = question_limit
                 
                 # Invalidate caches
                 try:

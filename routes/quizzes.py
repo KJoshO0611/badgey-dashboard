@@ -209,13 +209,24 @@ def edit(quiz_id):
             
             if request.method == 'POST':
                 quiz_name = request.form.get('quiz_name')
-                
+                question_limit_raw = request.form.get('question_limit')
+                question_limit = None
+                if question_limit_raw:
+                    try:
+                        question_limit = int(question_limit_raw)
+                        if question_limit < 1:
+                            flash("Question limit must be a positive integer.", "danger")
+                            question_limit = None
+                    except ValueError:
+                        flash("Question limit must be an integer.", "danger")
+                        question_limit = None
                 if not quiz_name:
                     flash("Quiz name is required.", "danger")
+                elif question_limit is None and question_limit_raw:
+                    pass  # Already flashed error above
                 else:
-                    # Update quiz name
-                    logger.info(f"Updating quiz {quiz_id} name to {quiz_name}")
-                    quiz.update(quiz_name)
+                    logger.info(f"Updating quiz {quiz_id} name to {quiz_name} and question_limit to {question_limit}")
+                    quiz.update(quiz_name, question_limit)
                     flash("Quiz updated successfully!", "success")
                     return redirect(url_for('quizzes.view', quiz_id=quiz_id))
             

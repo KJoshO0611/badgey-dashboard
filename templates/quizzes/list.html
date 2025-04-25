@@ -34,6 +34,7 @@
                             <th>Quiz Name</th>
                             <th>Creator</th>
                             <th>Questions</th>
+                            <th>Question Limit</th>
                             <th>Total Points</th>
                             <th>Actions</th>
                         </tr>
@@ -44,6 +45,7 @@
                                 <td>{{ quiz.name }}</td>
                                 <td>{{ quiz.creator_username or quiz.creator_id }}</td>
                                 <td>{{ quiz.question_count or 0 }}</td>
+                                <td>{{ quiz.question_limit or '—' }}</td>
                                 <td>{{ quiz.total_points or 0 }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
