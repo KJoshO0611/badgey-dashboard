@@ -118,9 +118,14 @@ def create():
             return render_template('quizzes/create.html')
             
         try:
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date')
+            question_limit = request.form.get('question_limit')
+            # Convert question_limit to int if possible
+            question_limit = int(question_limit) if question_limit else None
             # Create quiz using the Quiz model
             logger.info(f"Creating new quiz '{quiz_name}' for user {current_user.discord_id}")
-            quiz = Quiz.create(quiz_name, current_user.discord_id)
+            quiz = Quiz.create(quiz_name, current_user.discord_id, question_limit=question_limit, start_date=start_date, end_date=end_date)
             
             flash(f"Quiz '{quiz_name}' created successfully!", "success")
             return redirect(url_for('quizzes.edit', quiz_id=quiz.id))
@@ -210,6 +215,8 @@ def edit(quiz_id):
             if request.method == 'POST':
                 quiz_name = request.form.get('quiz_name')
                 question_limit_raw = request.form.get('question_limit')
+                start_date = request.form.get('start_date')
+                end_date = request.form.get('end_date')
                 question_limit = None
                 if question_limit_raw:
                     try:
@@ -225,8 +232,8 @@ def edit(quiz_id):
                 elif question_limit is None and question_limit_raw:
                     pass  # Already flashed error above
                 else:
-                    logger.info(f"Updating quiz {quiz_id} name to {quiz_name} and question_limit to {question_limit}")
-                    quiz.update(quiz_name, question_limit)
+                    logger.info(f"Updating quiz {quiz_id} name to {quiz_name}, question_limit to {question_limit}, start_date to {start_date}, end_date to {end_date}")
+                    quiz.update(quiz_name, question_limit, start_date=start_date, end_date=end_date)
                     flash("Quiz updated successfully!", "success")
                     return redirect(url_for('quizzes.view', quiz_id=quiz_id))
             
