@@ -43,6 +43,11 @@
                                 <i class="fas fa-list-alt me-1"></i>Quizzes
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('kobayashi.stories') }}">
+                                <i class="fas fa-rocket me-1"></i>Kobayashi Maru
+                            </a>
+                        </li>
                         {% if current_user.has_role('analytics_viewer') or current_user.has_role('admin') %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="analyticsDropdown" role="button" data-bs-toggle="dropdown">
@@ -67,6 +72,11 @@
                                     <li>
                                         <a class="dropdown-item" href="{{ url_for('analytics.tribbles') }}">
                                             <i class="fas fa-paw me-1"></i>Tribble Hunt
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{{ url_for('kobayashi.analytics') }}">
+                                            <i class="fas fa-rocket me-1"></i>Kobayashi Analytics
                                         </a>
                                     </li>
                                 </ul>
