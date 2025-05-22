@@ -30,6 +30,21 @@
                 <input type="text" class="form-control" id="quiz_name" name="quiz_name" required>
                 <div class="form-text">Give your quiz a descriptive name.</div>
             </div>
+            <div class="mb-3">
+                <label for="start_date" class="form-label">Start Date</label>
+                <input type="datetime-local" class="form-control" id="start_date" name="start_date" required>
+                <div class="form-text">When should the quiz become available?</div>
+            </div>
+            <div class="mb-3">
+                <label for="end_date" class="form-label">End Date</label>
+                <input type="datetime-local" class="form-control" id="end_date" name="end_date" required>
+                <div class="form-text">When should the quiz close?</div>
+            </div>
+            <div class="mb-3">
+                <label for="question_limit" class="form-label">Question Limit</label>
+                <input type="number" class="form-control" id="question_limit" name="question_limit" min="1" required>
+                <div class="form-text">Maximum number of questions in this quiz.</div>
+            </div>
             
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                 <a href="{{ url_for('quizzes.list') }}" class="btn btn-outline-secondary me-md-2">Cancel</a>

@@ -78,6 +78,8 @@ class Quiz:
         self.creator_username = creator_username
         self.question_limit = question_limit
         self.total_points = total_points
+        self.start_date = start_date
+        self.end_date = end_date
     
     @property
     def quiz_id(self):
@@ -158,7 +160,9 @@ class Quiz:
                     creator_id=quiz_data['creator_id'],
                     created_at=created_at,
                     creator_username=quiz_data.get('creator_username'),
-                    question_limit=quiz_data.get('question_limit')
+                    question_limit=quiz_data.get('question_limit'),
+                    start_date=quiz_data.get('start_date'),
+                    end_date=quiz_data.get('end_date')
                 )
         except Exception as e:
             if isinstance(e, QuizNotFoundError):
@@ -234,7 +238,7 @@ class Quiz:
             return []
     
     @staticmethod
-    def create(name, creator_id, creator_username=None, question_limit=None):
+    def create(name, creator_id, creator_username=None, question_limit=None, start_date=None, end_date=None):
         """Create a new quiz"""
         try:
             # Don't import from app directly - use get_cache helper
@@ -256,8 +260,8 @@ class Quiz:
                         logger.error(f"Error fetching username: {e}")
                         creator_username = str(creator_id)
                 
-                query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username, question_limit) VALUES (%s, %s, %s, %s)"
-                cursor.execute(query, (name, creator_id, creator_username, question_limit))
+                query = "INSERT INTO quizzes (quiz_name, creator_id, creator_username, question_limit, start_date, end_date) VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(query, (name, creator_id, creator_username, question_limit, start_date, end_date))
                 conn.commit()
                 
                 # Get the inserted ID
@@ -280,7 +284,9 @@ class Quiz:
                     creator_id=creator_id,
                     created_at=datetime.now(),
                     creator_username=creator_username,
-                    question_limit=question_limit
+                    question_limit=question_limit,
+                    start_date=start_date,
+                    end_date=end_date
                 )
         except Exception as e:
             import logging
@@ -288,8 +294,8 @@ class Quiz:
             logger.error(f"Error creating quiz: {e}", exc_info=True)
             raise
     
-    def update(self, name, question_limit=None):
-        """Update quiz details"""
+    def update(self, name, question_limit=None, start_date=None, end_date=None):
+        """Update quiz details, including start and end date"""
         try:
             # Don't import from app directly - use get_cache helper
             from flask import current_app
@@ -298,13 +304,15 @@ class Quiz:
             
             conn = get_db()
             with conn.cursor() as cursor:
-                query = "UPDATE quizzes SET quiz_name = %s, question_limit = %s WHERE quiz_id = %s"
-                cursor.execute(query, (name, question_limit, self.id))
+                query = "UPDATE quizzes SET quiz_name = %s, question_limit = %s, start_date = %s, end_date = %s WHERE quiz_id = %s"
+                cursor.execute(query, (name, question_limit, start_date, end_date, self.id))
                 conn.commit()
                 
                 # Update object property
                 self.name = name
                 self.question_limit = question_limit
+                self.start_date = start_date
+                self.end_date = end_date
                 
                 # Invalidate caches
                 try:
