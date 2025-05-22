@@ -30,13 +30,16 @@ class Quiz:
             rows = cursor.fetchall()
             return {row['quiz_id']: int(row['total']) if row['total'] is not None else 0 for row in rows}
     
-    def __init__(self, id, name, creator_id, created_at=None, creator_username=None, question_limit=None):
+    def __init__(self, id, name, creator_id, created_at=None, creator_username=None, question_limit=None, total_points=None, start_date=None, end_date=None):
         self.id = id
         self.name = name
         self.creator_id = creator_id
         self.created_at = created_at or datetime.now()
         self.creator_username = creator_username
         self.question_limit = question_limit
+        self.total_points = total_points
+        self.start_date = start_date
+        self.end_date = end_date
 
     @staticmethod
     def from_dict(data):

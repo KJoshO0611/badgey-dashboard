@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 import json
 import pickle
 from models.quiz import Quiz, QuizNotFoundError
+from models.question import Question
 from decorators import role_required
 from models.db import get_db
 from flask import current_app
@@ -177,7 +178,8 @@ def view(quiz_id):
                         logger.info(f"Using cached quiz data for quiz {quiz_id}")
                         quiz_data, questions_data = cached_data
                         cached_quiz = deserialize_quiz_data(quiz_data, is_list=False)
-                        cached_questions = [Quiz.question_from_dict(q) for q in questions_data]
+                        cached_questions = [Question.from_dict(q) for q in questions_data]
+                        cached_quiz.total_points = total_points
                         return render_template('quizzes/view.html', quiz=cached_quiz, questions=cached_questions, total_points=total_points)
                     else:
                         logger.info(f"No cached data found for quiz {quiz_id}")
@@ -199,7 +201,8 @@ def view(quiz_id):
             logger.error(f"General caching error: {cache_error}", exc_info=True)
             # Continue with non-cached quiz data
                 
-        return render_template('quizzes/view.html', quiz=quiz, questions=questions)
+        quiz.total_points = quiz.get_total_score()
+        return render_template('quizzes/view.html', quiz=quiz, questions=questions, total_points=quiz.total_points)
     except Exception as e:
         logger.error(f"Error viewing quiz: {e}", exc_info=True)
         flash("An error occurred while retrieving the quiz.", "danger")
@@ -314,7 +317,7 @@ def preview(quiz_id):
                         logger.info(f"Using cached preview data for quiz {quiz_id}")
                         quiz_data, questions_data = cached_data
                         cached_quiz = deserialize_quiz_data(quiz_data, is_list=False)
-                        cached_questions = [Quiz.question_from_dict(q) for q in questions_data]
+                        cached_questions = [Question.from_dict(q) for q in questions_data]
                         return render_template('quizzes/preview.html', quiz=cached_quiz, questions=cached_questions)
                     else:
                         logger.info(f"No cached preview data found for quiz {quiz_id}")

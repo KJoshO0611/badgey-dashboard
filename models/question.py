@@ -8,6 +8,19 @@ class QuestionNotFoundError(Exception):
 
 class Question:
     """Question model for question management"""
+
+    @staticmethod
+    def from_dict(data):
+        """Create a Question object from a dictionary (for deserialization from cache)"""
+        return Question(
+            id=data.get('id'),
+            quiz_id=data.get('quiz_id'),
+            text=data.get('text'),
+            options=data.get('options'),
+            correct_answer=data.get('correct_answer'),
+            score=data.get('score', 10),
+            explanation=data.get('explanation')
+        )
     
     def __init__(self, id, quiz_id, text, options, correct_answer, score=10, explanation=None):
         self.id = id
