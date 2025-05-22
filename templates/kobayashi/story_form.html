@@ -1,0 +1,27 @@
+{% extends 'layout.html' %}
+{% block title %}{{ 'Edit' if story else 'Add' }} Kobayashi Maru Story{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>{{ 'Edit' if story else 'Add' }} Kobayashi Maru Story</h2>
+  <form method="post">
+    <div class="mb-3">
+      <label for="code" class="form-label">Story Code</label>
+      <input type="text" class="form-control" id="code" name="code" value="{{ story.code if story else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="title" class="form-label">Title</label>
+      <input type="text" class="form-control" id="title" name="title" value="{{ story.title if story else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="description" class="form-label">Description</label>
+      <textarea class="form-control" id="description" name="description" rows="4" required>{{ story.intro if story else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+      <label for="author" class="form-label">Author</label>
+      <input type="text" class="form-control" id="author" name="author" value="{{ story.author if story else current_user.username if current_user else '' }}" readonly>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ 'Update' if story else 'Create' }}</button>
+    <a href="{{ url_for('kobayashi.stories') }}" class="btn btn-secondary ms-2">Cancel</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'layout.html' %}
+{% block title %}Nodes for Story: {{ story.title }}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Nodes for Story: <span class="text-primary">{{ story.title }}</span></h2>
+  <div class="mb-3 text-end">
+    <a href="{{ url_for('kobayashi.create_node_route', story_id=story.id) }}" class="btn btn-primary">Add Node</a>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center">ID</th>
+        <th>Title</th>
+        <th>Description</th>
+        <th class="text-center">Is Terminal?</th>
+        <th class="text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for node in nodes %}
+      <tr>
+        <td class="text-center">{{ node.id }}</td>
+        <td>{{ node.title }}</td>
+        <td>{{ node.description|truncate(60) }}</td>
+        <td class="text-center">{% if node.is_terminal %}<span class="badge rounded-pill bg-success">Yes</span>{% else %}<span class="badge rounded-pill bg-secondary">No</span>{% endif %}</td>
+        <td class="text-center">
+          <div class="btn-group" role="group">
+            <a href="{{ url_for('kobayashi.edit_node_route', node_id=node.id, story_id=story.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+            <form action="{{ url_for('kobayashi.delete_node_route', node_id=node.id, story_id=story.id) }}" method="post" style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this node?');">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center">No nodes found for this story.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  {% if pagination and pagination.pages > 1 %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-center">
+      <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('kobayashi.nodes', story_id=story.id, page=pagination.prev_num) }}" tabindex="-1">Previous</a>
+      </li>
+      {% for p in range(1, pagination.pages + 1) %}
+      <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="{{ url_for('kobayashi.nodes', story_id=story.id, page=p) }}">{{ p }}</a></li>
+      {% endfor %}
+      <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+        <a class="page-link" href="{{ url_for('kobayashi.nodes', story_id=story.id, page=pagination.next_num) }}">Next</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+
+  <div class="mt-3">
+    <a href="{{ url_for('kobayashi.stories') }}" class="btn btn-secondary">Back to Stories</a>
+  </div>
+</div>
+{% endblock %}

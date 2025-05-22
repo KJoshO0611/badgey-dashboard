@@ -1,0 +1,53 @@
+{% extends 'layout.html' %}
+{% block title %}Kobayashi Maru Stories{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Kobayashi Maru Stories</h2>
+  <div class="mb-3 text-end">
+    <a href="{{ url_for('kobayashi.create_story') }}" class="btn btn-primary">Add Story</a>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover">
+    <thead class="table-light">
+      <tr>
+        <th class="text-center">ID</th>
+        <th>Code</th>
+        <th>Title</th>
+        <th>Description</th>
+        <th>Author</th>
+        <th class="text-center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for story in stories %}
+      <tr>
+        <td class="text-center">{{ story.id }}</td>
+        <td>{{ story.code }}</td>
+        <td>{{ story.title }}</td>
+        <td>{{ story.intro|truncate(80) }}</td>
+        <td>{{ story.author }}</td>
+        <td class="text-center">
+          <div class="btn-group" role="group">
+            <a href="{{ url_for('kobayashi.edit_story', story_id=story.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+            <a href="{{ url_for('kobayashi.nodes', story_id=story.id) }}" class="btn btn-sm btn-outline-info">Nodes</a>
+            <form action="{{ url_for('kobayashi.delete_story_route', story_id=story.id) }}" method="post" style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this story?');">Delete</button>
+            </form>
+            <a href="{{ url_for('kobayashi.simulate', story_id=story.id) }}" class="btn btn-sm btn-outline-success">Simulate</a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center">No stories found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+</div>
+{% endblock %}

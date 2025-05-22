@@ -1,0 +1,61 @@
+{% extends 'layout.html' %}
+{% block title %}Kobayashi Maru Analytics{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Kobayashi Maru Analytics</h2>
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header">Story Runs Overview</div>
+        <div class="card-body">
+          <!-- Placeholder for chart (e.g., runs per story, completions) -->
+          <canvas id="storyRunsChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card mb-4">
+        <div class="card-header">Choice Distribution</div>
+        <div class="card-body">
+          <!-- Placeholder for chart (e.g., most/least chosen choices) -->
+          <canvas id="choiceDistributionChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card mb-4">
+        <div class="card-header">Participation Table</div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Runs Participated</th>
+                <th>Points Earned</th>
+                <th>Most Common Choice</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for user in participation %}
+              <tr>
+                <td>{{ user.username }}</td>
+                <td>{{ user.runs }}</td>
+                <td>{{ user.points }}</td>
+                <td>{{ user.common_choice }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="text-center">No participation data available.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Chart.js or similar can be included for rendering charts -->
+{% endblock %}

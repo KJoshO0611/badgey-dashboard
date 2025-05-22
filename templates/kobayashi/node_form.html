@@ -1,0 +1,207 @@
+{% extends 'layout.html' %}
+{% block title %}{{ 'Edit' if node else 'Add' }} Node for {{ story.title }}{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <h2>{{ 'Edit' if node else 'Add' }} Node for <span class="text-primary">{{ story.title }}</span></h2>
+  <form method="post">
+    <div class="mb-3">
+      <label for="id" class="form-label">Node ID</label>
+      <input type="text" class="form-control" id="id" name="id" value="{{ node.id if node else '' }}" {% if node %}readonly{% endif %} required>
+    </div>
+    <div class="mb-3">
+      <label for="title" class="form-label">Title</label>
+      <input type="text" class="form-control" id="title" name="title" value="{{ node.title if node else '' }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="description" class="form-label">Description</label>
+      <textarea class="form-control" id="description" name="description" rows="3" required>{{ node.description if node else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Choices</label>
+      <div id="choices-list">
+        <!-- Choices will be rendered here by JS -->
+      </div>
+      <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addChoice()">Add Choice</button>
+      <div class="form-text">Each choice must have a key, text, next node, and optional flags (comma separated).</div>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Conditions (optional)</label>
+      <div id="conditions-list">
+        <!-- Conditions will be rendered here by JS -->
+      </div>
+      <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="addCondition()">Add Condition</button>
+      <div class="form-text">Each condition is a string (e.g., a flag name).</div>
+    </div>
+    <input type="hidden" id="choices-json" name="choices">
+    <input type="hidden" id="conditions-json" name="conditions">
+    <script id="nodeChoicesJSON" type="application/json">
+      {{ (node.choices if node and node.choices else '{}')|tojson|safe }}
+    </script>
+    <script id="nodeCondsJSON" type="application/json">
+      {{ (node.conditions if node and node.conditions else '[]')|tojson|safe }}
+    </script>
+
+    <script>
+      // --- Choices ---
+      let choices = [];
+      function renderChoices() {
+        if (!Array.isArray(choices)) choices = [];
+        const list = document.getElementById('choices-list');
+        list.innerHTML = '';
+        choices.forEach((choice, idx) => {
+          const div = document.createElement('div');
+          div.className = 'row g-2 mb-2 align-items-end';
+          div.innerHTML = `
+            <div class="col-md-2">
+              <input type="text" class="form-control" placeholder="Key" value="${choice.key || ''}" onchange="if(!choices[${idx}]) choices[${idx}]={}; choices[${idx}].key=this.value;" required>
+            </div>
+            <div class="col-md-2">
+              <input type="text" class="form-control" placeholder="Text" value="${choice.text || ''}" onchange="if(!choices[${idx}]) choices[${idx}]={}; choices[${idx}].text=this.value;" required>
+            </div>
+            <div class="col-md-2">
+              <input type="text" class="form-control" placeholder="Next Node" value="${choice.next || ''}" onchange="if(!choices[${idx}]) choices[${idx}]={}; choices[${idx}].next=this.value;">
+            </div>
+            <div class="col-md-2">
+              <input type="text" class="form-control" placeholder="Flags Set (comma)" value="${choice.flags_set || ''}" onchange="if(!choices[${idx}]) choices[${idx}]={}; choices[${idx}].flags_set=this.value;">
+            </div>
+            <div class="col-md-2">
+              <input type="text" class="form-control" placeholder="Flags Required (comma)" value="${choice.flags_required || ''}" onchange="if(!choices[${idx}]) choices[${idx}]={}; choices[${idx}].flags_required=this.value;">
+            </div>
+            <div class="col-md-1 text-end">
+              <button class="btn btn-danger btn-sm remove-choice" type="button" data-idx="${idx}">&times;</button>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+        // Remove handler for all remove buttons
+        list.querySelectorAll('button.remove-choice').forEach(btn => {
+          btn.onclick = function() {
+            const idx = parseInt(btn.getAttribute('data-idx'));
+            choices.splice(idx, 1);
+            renderChoices();
+          };
+        });
+        document.getElementById('choices-json').value = JSON.stringify(
+          Object.fromEntries(choices.filter(c=>c.key).map(c=>[
+            c.key, {
+              text: c.text,
+              next: c.next,
+              flags_set: c.flags_set ? c.flags_set.split(',').map(f=>f.trim()).filter(f=>f) : [],
+              flags_required: c.flags_required ? c.flags_required.split(',').map(f=>f.trim()).filter(f=>f) : []
+            }
+          ]))
+        );
+      }
+      function addChoice() {
+        choices.push({key:'', text:'', next:'', flags_set:'', flags_required:''});
+        renderChoices();
+      }
+      // --- Conditions ---
+      let conditions = [];
+      function renderConditions() {
+        const list = document.getElementById('conditions-list');
+        list.innerHTML = '';
+        conditions.forEach((cond, idx) => {
+          const div = document.createElement('div');
+          div.className = 'row g-2 mb-2 align-items-end';
+          div.innerHTML = `
+            <div class="col-md-11">
+              <input type="text" class="form-control" placeholder="Condition" value="${cond || ''}" onchange="conditions[${idx}]=this.value;" required>
+            </div>
+            <div class="col-md-1 text-end">
+              <button class="btn btn-danger btn-sm remove-condition" type="button" data-idx="${idx}">&times;</button>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+        // Remove handler for all remove buttons
+        list.querySelectorAll('button.remove-condition').forEach(btn => {
+          btn.onclick = function() {
+            const idx = parseInt(btn.getAttribute('data-idx'));
+            conditions.splice(idx, 1);
+            renderConditions();
+          };
+        });
+        document.getElementById('conditions-json').value = JSON.stringify(conditions.filter(c=>c));
+      }
+      function addCondition() {
+        conditions.push('');
+        renderConditions();
+      }
+      // --- Initialization from existing node data (for edit) ---
+window.addEventListener('DOMContentLoaded', () => {
+  // Choices
+  try {
+    const nodeChoices = JSON.parse(document.getElementById('nodeChoicesJSON').textContent.trim());
+    choices = [];
+    if (nodeChoices && typeof nodeChoices === 'object' && Object.keys(nodeChoices).length > 0) {
+      for (const key in nodeChoices) {
+        if (Object.hasOwn(nodeChoices, key)) {
+          const val = nodeChoices[key] || {};
+          choices.push({
+            key: key,
+            text: val.text || '',
+            next: val.next || '',
+            flags_set: Array.isArray(val.flags_set) ? val.flags_set.join(',') : (val.flags_set || ''),
+            flags_required: Array.isArray(val.flags_required) ? val.flags_required.join(',') : (val.flags_required || '')
+          });
+        }
+      }
+    }
+  } catch (e) { choices = []; }
+  if (!Array.isArray(choices)) choices = [];
+  renderChoices();
+  // Conditions
+  try {
+    const nodeConds = JSON.parse(document.getElementById('nodeCondsJSON').textContent.trim());
+    if (Array.isArray(nodeConds) && nodeConds.length && typeof nodeConds[0] === "object" && nodeConds[0] !== null && "flag" in nodeConds[0]) {
+      conditions = nodeConds.map(c => c.flag);
+    } else {
+      conditions = Array.isArray(nodeConds) ? nodeConds : [];
+    }
+  } catch { conditions = []; }
+  renderConditions();
+});
+      // --- Before submit, ensure JSON fields are up to date ---
+      document.querySelector('form').addEventListener('submit', function() {
+        // Update choices array from DOM before serializing
+        const rows = document.querySelectorAll('#choices-list .row');
+        choices = Array.from(rows).map(row => {
+          const inputs = row.querySelectorAll('input');
+          return {
+            key: inputs[0].value,
+            text: inputs[1].value,
+            next: inputs[2].value,
+            flags_set: inputs[3].value,
+            flags_required: inputs[4].value
+          };
+        });
+        // Now serialize choices to hidden field as before
+        document.getElementById('choices-json').value = JSON.stringify(
+          Object.fromEntries(choices.filter(c => c.key).map(c => [
+            c.key, {
+              text: c.text,
+              next: c.next,
+              flags_set: c.flags_set ? c.flags_set.split(',').map(f => f.trim()).filter(f => f) : [],
+              flags_required: c.flags_required ? c.flags_required.split(',').map(f => f.trim()).filter(f => f) : []
+            }
+          ]))
+        );
+        // Update conditions array from DOM before serializing
+        const condRows = document.querySelectorAll('#conditions-list .row');
+        conditions = Array.from(condRows).map(row => {
+          const input = row.querySelector('input');
+          return input ? input.value : '';
+        }).filter(Boolean);
+        document.getElementById('conditions-json').value = JSON.stringify(conditions);
+      });
+    </script>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="is_terminal" name="is_terminal" value="1" {% if node and node.is_terminal %}checked{% endif %}>
+      <label class="form-check-label" for="is_terminal">Is Terminal Node?</label>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ 'Update' if node else 'Create' }}</button>
+    <a href="{{ url_for('kobayashi.nodes', story_id=story.id) }}" class="btn btn-secondary ms-2">Cancel</a>
+  </form>
+</div>
+{% endblock %}
