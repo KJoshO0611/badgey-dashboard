@@ -24,7 +24,8 @@ def _create_connection():
             password=current_app.config['DATABASE']['password'],
             database=current_app.config['DATABASE']['database'],
             cursorclass=pymysql.cursors.DictCursor,
-            charset='utf8mb4'
+            charset='utf8mb4',
+            connect_timeout=5
         )
         logger.debug("Created new database connection")
         return conn

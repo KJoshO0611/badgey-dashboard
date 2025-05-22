@@ -62,10 +62,12 @@ def list():
             logger.info(f"Regular user: fetching quizzes for user {current_user.discord_id}")
             quizzes = Quiz.get_by_creator(current_user.discord_id)
         
-        # Add question counts to each quiz
+        # Efficiently add question counts and total points using aggregation (avoid N+1 queries)
+        question_counts = Quiz.get_all_question_counts()
+        total_scores = Quiz.get_all_total_scores()
         for quiz in quizzes:
-            quiz.question_count = quiz.get_question_count()
-            quiz.total_points = quiz.get_total_score()
+            quiz.question_count = question_counts.get(quiz.id, 0)
+            quiz.total_points = total_scores.get(quiz.id, 0)
         
         # Try to get quizzes from cache first - using get_cache function
         try:
@@ -79,7 +81,11 @@ def list():
                     cached_data = cache.get(cache_key)
                     if cached_data:
                         logger.info(f"Using cached quizzes for user {current_user.id}")
-                        cached_quizzes = deserialize_quiz_data(cached_data)
+                        import json
+                        cached_quizzes_data = json.loads(cached_data)
+                        cached_quizzes = deserialize_quiz_data(cached_quizzes_data)
+                        #logger.info(f"cached_quizzes_data: {cached_quizzes_data}")
+                        #logger.info(f"cached_quizzes: {cached_quizzes}")
                         return render_template('quizzes/list.html', quizzes=cached_quizzes)
                     else:
                         logger.info(f"No cached data found for key: {cache_key}")
@@ -90,8 +96,11 @@ def list():
             if cache:
                 try:
                     logger.info(f"Attempting to cache quizzes with key: {cache_key}")
+                    import json
                     serialized_data = serialize_quiz_data(quizzes)
-                    cache.set(cache_key, serialized_data, timeout=300)
+                    cache.set(cache_key, json.dumps(serialized_data), timeout=300)
+                    #logger.info(f"quizzes: {serialized_data}")
+                    #logger.info(f"serialized_data: {serialized_data}")
                     logger.info(f"Cached quizzes for user {current_user.id}")
                 except Exception as cache_set_error:
                     logger.warning(f"Failed to cache quizzes: {cache_set_error}")

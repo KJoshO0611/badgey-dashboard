@@ -23,6 +23,7 @@ from routes.quizzes import quizzes_bp
 from routes.analytics import analytics_bp
 from routes.admin import admin_bp
 from routes.api import api_bp
+from routes.kobayashi import kobayashi_bp
 
 # Load environment variables
 load_dotenv()
@@ -274,6 +275,7 @@ app.register_blueprint(quizzes_bp)
 app.register_blueprint(analytics_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(api_bp, url_prefix='/api')
+app.register_blueprint(kobayashi_bp)
 
 @login_manager.user_loader
 def load_user(user_id):

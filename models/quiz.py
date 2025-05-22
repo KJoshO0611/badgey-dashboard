@@ -11,6 +11,24 @@ class QuizNotFoundError(Exception):
 
 class Quiz:
     """Quiz model for quiz management"""
+
+    @staticmethod
+    def get_all_question_counts():
+        """Return a dict mapping quiz_id to question count for all quizzes."""
+        conn = get_db()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT quiz_id, COUNT(*) as count FROM questions GROUP BY quiz_id")
+            rows = cursor.fetchall()
+            return {row['quiz_id']: row['count'] for row in rows}
+
+    @staticmethod
+    def get_all_total_scores():
+        """Return a dict mapping quiz_id to total score for all quizzes."""
+        conn = get_db()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT quiz_id, SUM(score) as total FROM questions GROUP BY quiz_id")
+            rows = cursor.fetchall()
+            return {row['quiz_id']: int(row['total']) if row['total'] is not None else 0 for row in rows}
     
     def __init__(self, id, name, creator_id, created_at=None, creator_username=None, question_limit=None):
         self.id = id
@@ -19,6 +37,47 @@ class Quiz:
         self.created_at = created_at or datetime.now()
         self.creator_username = creator_username
         self.question_limit = question_limit
+
+    @staticmethod
+    def from_dict(data):
+        """Create a Quiz object from a dictionary (for deserialization from cache)"""
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            created_at = data.get('created_at')
+            if created_at and isinstance(created_at, str):
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except ValueError as e:
+                    logger.warning(f"Could not parse datetime string: {created_at}, error: {e}")
+                    created_at = datetime.now()
+            quiz_id = data.get('id')
+            if not quiz_id:
+                raise ValueError("Quiz dictionary missing required 'id' field")
+            quiz = Quiz(
+                id=quiz_id,
+                name=data.get('name', 'Unnamed Quiz'),
+                creator_id=data.get('creator_id', 0),
+                created_at=created_at,
+                creator_username=data.get('creator_username', 'Unknown'),
+                question_limit=data.get('question_limit')
+            )
+            if 'question_count' in data:
+                quiz.question_count = data['question_count']
+            if 'total_points' in data:
+                quiz.total_points = data['total_points']
+            return quiz
+        except Exception as e:
+            logger.error(f"Error deserializing quiz from dictionary: {e}", exc_info=True)
+            raise
+
+        self.id = id
+        self.name = name
+        self.creator_id = creator_id
+        self.created_at = created_at or datetime.now()
+        self.creator_username = creator_username
+        self.question_limit = question_limit
+        self.total_points = total_points
     
     @property
     def quiz_id(self):
@@ -42,6 +101,19 @@ class Quiz:
                     print(f"Error converting created_at to ISO format: {e}")
                     created_at_iso = str(self.created_at)
             
+            # Ensure question_count and total_points are int for JSON serialization
+            question_count = getattr(self, 'question_count', None)
+            total_points = getattr(self, 'total_points', None)
+            if question_count is not None:
+                try:
+                    question_count = int(question_count)
+                except Exception:
+                    pass
+            if total_points is not None:
+                try:
+                    total_points = int(total_points)
+                except Exception:
+                    pass
             return {
                 'id': self.id,
                 'name': self.name,
@@ -49,8 +121,8 @@ class Quiz:
                 'creator_username': self.creator_username,
                 'created_at': created_at_iso,
                 'question_limit': self.question_limit,
-                # Include question_count if it exists
-                'question_count': getattr(self, 'question_count', None)
+                'question_count': question_count,
+                'total_points': total_points
             }
         except Exception as e:
             print(f"Error in Quiz.to_dict: {e}")
@@ -413,75 +485,80 @@ class Quiz:
         except Exception as e:
             print(f"Error getting completion count: {e}")
             return 0
-    
-    @staticmethod
-    def from_dict(data):
-        """Create a Quiz object from a dictionary (for deserialization from cache)"""
+
+    # End of previous method
+
+    # The following methods are part of the Quiz class
+
+def delete(self):
+    """Delete quiz and all its questions"""
+    try:
+        # Don't import from app directly - use get_cache helper
+        from flask import current_app
         import logging
         logger = logging.getLogger(__name__)
-        
-        try:
-            created_at = data.get('created_at')
-            if created_at and isinstance(created_at, str):
-                try:
-                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                except ValueError as e:
-                    logger.warning(f"Could not parse datetime string: {created_at}, error: {e}")
-                    created_at = datetime.now()
-            
-            # Ensure all required fields exist with fallbacks
-            quiz_id = data.get('id')
-            if not quiz_id:
-                raise ValueError("Quiz dictionary missing required 'id' field")
-                
-            return Quiz(
-                id=quiz_id,
-                name=data.get('name', 'Unnamed Quiz'),
-                creator_id=data.get('creator_id', 0),
-                created_at=created_at,
-                creator_username=data.get('creator_username', 'Unknown')
-            )
-        except Exception as e:
-            logger.error(f"Error deserializing quiz from dictionary: {e}", exc_info=True)
-            raise
-        
-    @staticmethod
-    def question_from_dict(data):
-        """Create a Question object from a dictionary (for deserialization from cache)"""
+
+        conn = get_db()
+        with conn.cursor() as cursor:
+            # First delete all questions
+            query = "DELETE FROM questions WHERE quiz_id = %s"
+            cursor.execute(query, (self.id,))
+
+            # Then delete the quiz
+            query = "DELETE FROM quizzes WHERE quiz_id = %s"
+            cursor.execute(query, (self.id,))
+
+            conn.commit()
+
+            # Invalidate caches
+            try:
+                cache = current_app.cache if hasattr(current_app, 'cache') else None
+                if cache:
+                    # Clear user's quiz list cache
+                    cache_key = f"quizzes_list_{self.creator_id}"
+                    cache.delete(cache_key)
+                    logger.info(f"Invalidated creator's quiz list cache: {cache_key}")
+
+                    # Clear view cache for this quiz for all users (1-10)
+                    for i in range(1, 10):
+                        view_key = f"quiz_view_{self.id}_{i}"
+                        cache.delete(view_key)
+
+                    # Clear preview cache
+                    preview_key = f"quiz_preview_{self.id}"
+                    cache.delete(preview_key)
+                    logger.info(f"Invalidated quiz cache keys for quiz {self.id}")
+            except Exception as e:
+                logger.error(f"Error invalidating cache: {e}")
+
+            return True
+    except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        
-        try:
-            # Ensure all required fields exist with fallbacks
-            question_id = data.get('id')
-            quiz_id = data.get('quiz_id')
-            
-            if not question_id or not quiz_id:
-                logger.error(f"Question dictionary missing required fields: {data}")
-                raise ValueError("Question dictionary missing required fields: 'id' or 'quiz_id'")
-            
-            # Ensure options is a dictionary
-            options = data.get('options', {})
-            if not isinstance(options, dict):
-                logger.warning(f"Question options is not a dictionary, converting: {options}")
-                if isinstance(options, str):
-                    try:
-                        import json
-                        options = json.loads(options)
-                    except:
-                        options = {}
-                else:
-                    options = {}
-            
-            return Question(
-                id=question_id,
-                quiz_id=quiz_id,
-                text=data.get('text', 'No question text'),
+        logger.error(f"Error deleting quiz: {e}", exc_info=True)
+        raise
+
+def get_questions(self):
+    """Get all questions for this quiz"""
+    conn = get_db()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM questions WHERE quiz_id = %s ORDER BY question_id ASC",
+            (self.id,)
+        )
+        questions_data = cursor.fetchall()
+
+        result = []
+        for q in questions_data:
+            # Parse options from JSON
+            options = json.loads(q.get('options', '{}'))
+            result.append(Question(
+                id=q['question_id'],
+                quiz_id=q['quiz_id'],
+                text=q['question_text'],
                 options=options,
-                correct_answer=data.get('correct_answer', ''),
-                score=data.get('score', 10),
-                explanation=data.get('explanation', '')
-            )
-        except Exception as e:
-            logger.error(f"Error deserializing question from dictionary: {e}", exc_info=True)
-            raise 
+                correct_answer=q.get('correct_answer', ''),
+                score=q.get('score', 10),
+                explanation=q.get('explanation', '')
+            ))
+    return result
