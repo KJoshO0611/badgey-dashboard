@@ -61,7 +61,17 @@ def nodes(story_id):
     if not story:
         flash('Story not found.', 'danger')
         return redirect(url_for('kobayashi.stories'))
+    import json
     nodes = get_nodes_for_story(story_id)
+    # Parse choices JSON for each node
+    for node in nodes:
+        if 'choices' in node and node['choices']:
+            try:
+                node['choices_dict'] = json.loads(node['choices'])
+            except Exception:
+                node['choices_dict'] = {}
+        else:
+            node['choices_dict'] = {}
     # Pagination logic
     try:
         page = int(request.args.get('page', 1))
@@ -301,6 +311,29 @@ def simulate(story_id):
 @kobayashi_bp.route('/analytics')
 @login_required
 def analytics():
-    # Placeholder for analytics data
-    participation = []
-    return render_template('kobayashi/analytics.html', participation=participation)
+    from models.kobayashi_analytics import (
+        get_story_run_stats,
+        get_choice_distribution,
+        get_user_participation,
+        get_analytics_summary,
+        get_custom_actions
+    )
+    
+    # Get page and filter parameters
+    page = request.args.get('page', 1, type=int)
+    run_id = request.args.get('run_id', None)
+    
+    # Get analytics data from the database
+    story_stats = get_story_run_stats()
+    choice_stats = get_choice_distribution()
+    user_participation = get_user_participation()
+    summary = get_analytics_summary()
+    custom_actions = get_custom_actions(page=page, per_page=10, run_id=run_id)
+    
+    return render_template('kobayashi/analytics.html', 
+                           story_stats=story_stats,
+                           choice_stats=choice_stats,
+                           user_participation=user_participation,
+                           summary=summary,
+                           custom_actions=custom_actions,
+                           run_id=run_id)

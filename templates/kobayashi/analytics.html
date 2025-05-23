@@ -2,14 +2,63 @@
 {% block title %}Kobayashi Maru Analytics{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Kobayashi Maru Analytics</h2>
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Kobayashi Maru Analytics</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="refreshBtn">
+        <i class="fas fa-sync-alt me-1"></i>Refresh Data
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card text-white bg-primary">
+        <div class="card-body">
+          <h5 class="card-title">Total Stories</h5>
+          <h2 class="display-4">{{ summary.total_stories }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-success">
+        <div class="card-body">
+          <h5 class="card-title">Total Runs</h5>
+          <h2 class="display-4">{{ summary.total_runs }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-info">
+        <div class="card-body">
+          <h5 class="card-title">Completion Rate</h5>
+          <h2 class="display-4">{{ summary.completion_rate }}%</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-white bg-warning">
+        <div class="card-body">
+          <h5 class="card-title">Active Users</h5>
+          <h2 class="display-4">{{ summary.active_users }}</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="row">
     <div class="col-md-6">
       <div class="card mb-4">
         <div class="card-header">Story Runs Overview</div>
         <div class="card-body">
-          <!-- Placeholder for chart (e.g., runs per story, completions) -->
-          <canvas id="storyRunsChart"></canvas>
+          <canvas id="storyRunsChart" height="300"></canvas>
+          {% if not story_stats %}
+          <div class="text-center py-3 text-muted">
+            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+            <p>No story run data available.</p>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -17,38 +66,83 @@
       <div class="card mb-4">
         <div class="card-header">Choice Distribution</div>
         <div class="card-body">
-          <!-- Placeholder for chart (e.g., most/least chosen choices) -->
-          <canvas id="choiceDistributionChart"></canvas>
+          <canvas id="choiceDistributionChart" height="300"></canvas>
+          {% if not choice_stats %}
+          <div class="text-center py-3 text-muted">
+            <i class="fas fa-chart-pie fa-3x mb-3"></i>
+            <p>No choice distribution data available.</p>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
+  
+  <div class="card mb-4">
+    <div class="card-header">Story Performance</div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-striped table-hover">
+          <thead>
+            <tr>
+              <th>Story</th>
+              <th class="text-center">Total Runs</th>
+              <th class="text-center">Completions</th>
+              <th class="text-center">Completion Rate</th>
+              <th class="text-center">Unique Users</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for story in story_stats %}
+            <tr>
+              <td>{{ story.title }}</td>
+              <td class="text-center">{{ story.total_runs }}</td>
+              <td class="text-center">{{ story.completions }}</td>
+              <td class="text-center">{{ (story.completions / story.total_runs * 100)|round(1) if story.total_runs > 0 else 0 }}%</td>
+              <td class="text-center">{{ story.unique_users }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="text-center">No story data available.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div class="row">
     <div class="col-md-12">
       <div class="card mb-4">
-        <div class="card-header">Participation Table</div>
+        <div class="card-header">User Participation</div>
         <div class="card-body">
-          <table class="table table-striped">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Runs Participated</th>
-                <th>Points Earned</th>
-                <th>Most Common Choice</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for user in participation %}
-              <tr>
-                <td>{{ user.username }}</td>
-                <td>{{ user.runs }}</td>
-                <td>{{ user.points }}</td>
-                <td>{{ user.common_choice }}</td>
-              </tr>
-              {% else %}
-              <tr>
-                <td colspan="4" class="text-center">No participation data available.</td>
-              </tr>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th class="text-center">Total Runs</th>
+                  <th class="text-center">Stories Played</th>
+                  <th class="text-center">Completion Rate</th>
+                  <th>Most Common Choice</th>
+                  <th>Last Played</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in user_participation %}
+                <tr>
+                  <td>{{ user.username }}</td>
+                  <td class="text-center">{{ user.runs }}</td>
+                  <td class="text-center">{{ user.stories_played }}</td>
+                  <td class="text-center">{{ user.completion_rate }}%</td>
+                  <td>{{ user.common_choice }}</td>
+                  <td>{{ user.last_played|default('-') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="6" class="text-center">No participation data available.</td>
+                </tr>
               {% endfor %}
             </tbody>
           </table>
@@ -56,6 +150,241 @@
       </div>
     </div>
   </div>
+  
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Custom Actions</span>
+          <div>
+            <form class="d-inline-flex" method="get" action="{{ url_for('kobayashi.analytics') }}">
+              <div class="input-group input-group-sm">
+                <input type="text" name="run_id" class="form-control" placeholder="Filter by Run ID" value="{{ run_id or '' }}">
+                <button class="btn btn-outline-secondary" type="submit">Filter</button>
+                {% if run_id %}
+                <a href="{{ url_for('kobayashi.analytics') }}" class="btn btn-outline-danger">Clear</a>
+                {% endif %}
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>User</th>
+                  <th>Node</th>
+                  <th>Run ID</th>
+                  <th>Text</th>
+                  <th>Submitted At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for action in custom_actions.actions %}
+                <tr>
+                  <td>{{ action.id }}</td>
+                  <td>{{ action.user_name or action.user_id|truncate(10, true) }}</td>
+                  <td>{{ action.node_title or action.node_id }}</td>
+                  <td>
+                    <a href="{{ url_for('kobayashi.analytics', run_id=action.run_id) }}">
+                      {{ action.run_id|truncate(15, true) }}
+                    </a>
+                  </td>
+                  <td>{{ action.text|truncate(50, true) }}</td>
+                  <td>{{ action.submitted_at }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="6" class="text-center">No custom action data available.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          
+          {% if custom_actions.total > 0 %}
+          <nav aria-label="Custom actions pagination">
+            <ul class="pagination justify-content-center">
+              <li class="page-item {{ 'disabled' if custom_actions.page == 1 else '' }}">
+                <a class="page-link" href="{{ url_for('kobayashi.analytics', page=custom_actions.page-1, run_id=run_id) if custom_actions.page > 1 else '#' }}">
+                  Previous
+                </a>
+              </li>
+              
+              {% for p in range(1, custom_actions.pages + 1) %}
+                {% if p == custom_actions.page %}
+                <li class="page-item active">
+                  <span class="page-link">{{ p }}</span>
+                </li>
+                {% elif p <= 3 or p >= custom_actions.pages - 2 or (p >= custom_actions.page - 1 and p <= custom_actions.page + 1) %}
+                <li class="page-item">
+                  <a class="page-link" href="{{ url_for('kobayashi.analytics', page=p, run_id=run_id) }}">{{ p }}</a>
+                </li>
+                {% elif p == 4 and custom_actions.page > 4 or p == custom_actions.pages - 3 and custom_actions.page < custom_actions.pages - 3 %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+                {% endif %}
+              {% endfor %}
+              
+              <li class="page-item {{ 'disabled' if custom_actions.page == custom_actions.pages else '' }}">
+                <a class="page-link" href="{{ url_for('kobayashi.analytics', page=custom_actions.page+1, run_id=run_id) if custom_actions.page < custom_actions.pages else '#' }}">
+                  Next
+                </a>
+              </li>
+            </ul>
+          </nav>
+          {% endif %}
+          
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
-<!-- Chart.js or similar can be included for rendering charts -->
+
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Add data to the page as HTML data attributes -->
+<div id="chart-data" 
+     data-story-stats='{{ story_stats|tojson }}' 
+     data-choice-stats='{{ choice_stats|tojson }}' 
+     style="display: none;"></div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Refresh button functionality
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+      location.reload();
+    });
+
+    // Parse data from HTML data attributes
+    const chartDataElement = document.getElementById('chart-data');
+    let storyStats = null;
+    let choiceStats = null;
+    
+    try {
+      if (chartDataElement.dataset.storyStats) {
+        storyStats = JSON.parse(chartDataElement.dataset.storyStats);
+      }
+      if (chartDataElement.dataset.choiceStats) {
+        choiceStats = JSON.parse(chartDataElement.dataset.choiceStats);
+      }
+    } catch (e) {
+      console.error('Error parsing chart data:', e);
+    }
+
+    // Set up Story Runs Chart
+    if (storyStats && storyStats.length > 0) {
+      const storyRunsCtx = document.getElementById('storyRunsChart');
+      const storyLabels = storyStats.map(story => story.title);
+      const storyRunsData = storyStats.map(story => story.total_runs);
+      const storyUsersData = storyStats.map(story => story.unique_users);
+      
+      new Chart(storyRunsCtx, {
+        type: 'bar',
+        data: {
+          labels: storyLabels,
+          datasets: [{
+            label: 'Total Runs',
+            data: storyRunsData,
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          }, {
+            label: 'Unique Users',
+            data: storyUsersData,
+            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'Story Runs vs Unique Users'
+            }
+          }
+        }
+      });
+    }
+
+    // Set up Choice Distribution Chart
+    if (choiceStats && choiceStats.length > 0) {
+      const choiceDistCtx = document.getElementById('choiceDistributionChart');
+      const top10Choices = choiceStats.slice(0, 10);
+      const choiceLabels = top10Choices.map(choice => choice.choice_text);
+      const choiceData = top10Choices.map(choice => choice.choice_count);
+      
+      const backgroundColors = [
+        'rgba(255, 99, 132, 0.7)',
+        'rgba(54, 162, 235, 0.7)',
+        'rgba(255, 206, 86, 0.7)',
+        'rgba(75, 192, 192, 0.7)',
+        'rgba(153, 102, 255, 0.7)',
+        'rgba(255, 159, 64, 0.7)',
+        'rgba(199, 199, 199, 0.7)',
+        'rgba(83, 102, 255, 0.7)',
+        'rgba(40, 159, 64, 0.7)',
+        'rgba(210, 99, 132, 0.7)'
+      ];
+      
+      const borderColors = [
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(75, 192, 192, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(255, 159, 64, 1)',
+        'rgba(199, 199, 199, 1)',
+        'rgba(83, 102, 255, 1)',
+        'rgba(40, 159, 64, 1)',
+        'rgba(210, 99, 132, 1)'
+      ];
+      
+      new Chart(choiceDistCtx, {
+        type: 'pie',
+        data: {
+          labels: choiceLabels,
+          datasets: [{
+            label: 'Times Chosen',
+            data: choiceData,
+            backgroundColor: backgroundColors,
+            borderColor: borderColors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Top 10 Most Popular Choices'
+            },
+            legend: {
+              position: 'right',
+              labels: {
+                boxWidth: 12
+              }
+            }
+          }
+        }
+      });
+    }
+  });
+</script>
 {% endblock %}
