@@ -2,48 +2,94 @@
 {% block title %}Nodes for Story: {{ story.title }}{% endblock %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Nodes for Story: <span class="text-primary">{{ story.title }}</span></h2>
-  <div class="mb-3 text-end">
-    <a href="{{ url_for('kobayashi.create_node_route', story_id=story.id) }}" class="btn btn-primary">Add Node</a>
-  </div>
-  <div class="card">
-    <div class="card-body">
-      <div class="table-responsive">
-        <table class="table table-hover">
-    <thead class="table-light">
-      <tr>
-        <th class="text-center">ID</th>
-        <th>Title</th>
-        <th>Description</th>
-        <th class="text-center">Is Terminal?</th>
-        <th class="text-center">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for node in nodes %}
-      <tr>
-        <td class="text-center">{{ node.id }}</td>
-        <td>{{ node.title }}</td>
-        <td>{{ node.description|truncate(60) }}</td>
-        <td class="text-center">{% if node.is_terminal %}<span class="badge rounded-pill bg-success">Yes</span>{% else %}<span class="badge rounded-pill bg-secondary">No</span>{% endif %}</td>
-        <td class="text-center">
-          <div class="btn-group" role="group">
-            <a href="{{ url_for('kobayashi.edit_node_route', node_id=node.id, story_id=story.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
-            <form action="{{ url_for('kobayashi.delete_node_route', node_id=node.id, story_id=story.id) }}" method="post" style="display:inline;">
-              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this node?');">Delete</button>
-            </form>
-          </div>
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="5" class="text-center">No nodes found for this story.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-      </table>
+  <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Nodes for Story: <span class="text-warning">{{ story.title }}</span></h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+      <div class="btn-group me-2">
+        <a href="{{ url_for('kobayashi.create_node_route', story_id=story.id) }}" class="btn btn-sm btn-warning">
+          <i class="fas fa-plus me-1"></i>Add Node
+        </a>
+        <a href="{{ url_for('kobayashi.stories') }}" class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-arrow-left me-1"></i>Back to Stories
+        </a>
+      </div>
     </div>
   </div>
+
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="card-title mb-0">Story Nodes</h5>
+    </div>
+    <div class="card-body">
+    {% if nodes %}
+      <div class="accordion" id="nodesAccordion">
+      {% for node in nodes %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading{{ node.id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ node.id }}" aria-expanded="false" aria-controls="collapse{{ node.id }}">
+              <div class="d-flex align-items-center w-100">
+                <span class="badge bg-warning text-dark me-2">{{ node.id }}</span> {{ node.title }}
+                {% if node.is_terminal %}
+                  <span class="badge bg-success ms-auto me-2">Terminal</span>
+                {% else %}
+                  <span class="badge bg-secondary ms-auto me-2">Non-Terminal</span>
+                {% endif %}
+              </div>
+            </button>
+          </h2>
+          <div id="collapse{{ node.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ node.id }}" data-bs-parent="#nodesAccordion">
+            <div class="accordion-body">
+              <div class="d-flex justify-content-end mb-3">
+                <a href="{{ url_for('kobayashi.edit_node_route', node_id=node.id, story_id=story.id) }}" class="btn btn-sm btn-outline-warning me-1">Edit</a>
+                <form action="{{ url_for('kobayashi.delete_node_route', node_id=node.id, story_id=story.id) }}" method="post" style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this node?');">Delete</button>
+                </form>
+              </div>
+
+              <h6>Description:</h6>
+              <p>{{ node.description }}</p>
+              
+              <h6>Choices:</h6>
+              <ul class="list-group mb-3">
+                {% for key, choice in node.choices_dict.items() %}
+                  <li class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                      <div class="ms-2 me-auto">
+                        <div class="fw-bold">{{ choice.text }}</div>
+                        <div class="mt-2">
+                          {% if choice.next %}
+                            <span class="badge bg-primary me-1">Next: {{ choice.next }}</span>
+                          {% endif %}
+                          {% if choice.flags_required %}
+                            <span class="badge bg-warning text-dark me-1">Requires: {{ choice.flags_required|join(', ') }}</span>
+                          {% endif %}
+                          {% if choice.flags_set %}
+                            <span class="badge bg-info text-dark">Sets: {{ choice.flags_set|join(', ') }}</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                {% else %}
+                  <li class="list-group-item text-muted"><i>No choices defined.</i></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+    <div class="text-center py-5">
+      <i class="fas fa-project-diagram fa-4x mb-3 text-muted"></i>
+      <h5>No nodes found</h5>
+      <p class="text-muted">This story doesn't have any nodes yet.</p>
+      <a href="{{ url_for('kobayashi.create_node_route', story_id=story.id) }}" class="btn btn-warning mt-3">
+        <i class="fas fa-plus me-1"></i>Add Your First Node
+      </a>
+    </div>
+    {% endif %}
+    </div>
   </div>
 
   {% if pagination and pagination.pages > 1 %}
@@ -61,9 +107,4 @@
     </ul>
   </nav>
   {% endif %}
-
-  <div class="mt-3">
-    <a href="{{ url_for('kobayashi.stories') }}" class="btn btn-secondary">Back to Stories</a>
-  </div>
-</div>
 {% endblock %}
